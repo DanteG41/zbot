@@ -1,0 +1,8 @@
+AlignTrailingComments: true
+AllowShortFunctionsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+ColumnLimit: 100
+BreakBeforeTernaryOperators: true
+AlignConsecutiveAssignments: true
+IndentWidth: 2

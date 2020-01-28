@@ -1,19 +1,15 @@
 #include <getopt.h>
 #include <zconfig.h>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   int opt;
   ZConfig config;
 
-  while ((opt = getopt(argc, argv, "hf:")) != -1)
-  {
-    switch (opt)
-    {
-    case 'f':
-    {
-      config.configFile = optarg;
-      break;
+  while ((opt = getopt(argc, argv, "hf:")) != -1) {
+    switch (opt) {
+    case 'f': {
+      config.configFile = optarg; // test
+      break;                      // test2
     }
     default:
       fprintf(stderr, "Usage: %s [-f configfile] -[c|C] chat -m message\n\
