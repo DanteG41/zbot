@@ -1,6 +1,3 @@
-[submodule "libusual"]
-	path = libusual
-	url = https://github.com/libusual/libusual/
-[submodule "lib"]
-	path = lib
-	url = https://github.com/libusual/libusual/
+[submodule "lib/simpleini"]
+	path = lib/simpleini
+	url = https://github.com/brofield/simpleini
