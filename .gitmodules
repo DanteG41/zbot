@@ -1,0 +1,6 @@
+[submodule "libusual"]
+	path = libusual
+	url = https://github.com/libusual/libusual/
+[submodule "lib"]
+	path = lib
+	url = https://github.com/libusual/libusual/
