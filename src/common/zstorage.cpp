@@ -1,15 +1,22 @@
 #include <iostream>
-#include <sys/stat.h>
+#include <unistd.h>
 #include <zstorage.h>
 
+int ZStorage::updateStat() { return stat(path_.c_str(), &stat_buf_); }
+
 void ZStorage::checkDir() {
-  struct stat stat_buf;
-  if (stat(path_.c_str(), &stat_buf) != 0) {
+  if (updateStat() != 0) {
     if (errno == ENOENT) {
       createDir();
     } else {
       throw ZStorageException("could not read permissions of directory " + path_);
     }
+  }
+  if (!S_ISDIR(stat_buf_.st_mode)) {
+    throw ZStorageException("specified data directory \"" + path_ + "\" is not a directory");
+  }
+  if (stat_buf_.st_uid != geteuid()) {
+    throw ZStorageException("data directory \"" + path_ + "\" has wrong ownership");
   }
 }
 
@@ -21,4 +28,5 @@ void ZStorage::createDir() {
       throw ZStorageException("cannot create directory " + path_);
     }
   }
+  updateStat();
 }
