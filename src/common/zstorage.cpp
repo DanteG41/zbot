@@ -18,6 +18,9 @@ void ZStorage::checkDir() {
   if (stat_buf_.st_uid != geteuid()) {
     throw ZStorageException("data directory \"" + path_ + "\" has wrong ownership");
   }
+  if (stat_buf_.st_mode & (S_IWGRP | S_IRWXO)) {
+    throw ZStorageException("data directory \"" + path_ + "\" permissions should be u=rwx (0750)");
+  }
 }
 
 void ZStorage::createDir() {
