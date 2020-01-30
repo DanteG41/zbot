@@ -1,23 +1,23 @@
 #include <simpleini/SimpleIni.h>
 #include <zconfig.h>
 
-void ZConfig::load() {
+void ZConfig::load(const char* sectionName, std::map<std::string, std::string>& p) {
+  params_ = p;
   CSimpleIniA ini_file;
   ini_file.SetUnicode();
   ini_file.LoadFile(configFile);
-  for (paramsIter_ = params_.begin(); paramsIter_ != params_.end(); paramsIter_++) {
-    paramsIter_->second =
-        ini_file.GetValue("zbot", paramsIter_->first.c_str(), paramsIter_->second.c_str());
+  for (std::pair<const std::string, std::string> s : params_) {
+    s.second = ini_file.GetValue(sectionName, s.first.c_str(), s.second.c_str());
   }
 }
 
-void ZConfig::getParam(const char *name, int &val) {
-  paramsIter_ = params_.find(name);
-  paramsIter_ == params_.end() ? throw ZConfigException("Param int not found")
-                               : val = std::stoi(paramsIter_->second);
+void ZConfig::load(std::map<std::string, std::string>& p) { load("main", p); }
+
+void ZConfig::getParam(const char* name, int& val) {
+  std::map<std::string, std::string>::iterator i = params_.find(name);
+  i == params_.end() ? throw ZConfigException("Param int not found") : val = std::stoi(i->second);
 }
-void ZConfig::getParam(const char *name, std::string &val) {
-  paramsIter_ = params_.find(name);
-  paramsIter_ == params_.end() ? throw ZConfigException("Param string not found")
-                               : val = paramsIter_->second;
+void ZConfig::getParam(const char* name, std::string& val) {
+  std::map<std::string, std::string>::iterator i = params_.find(name);
+  i == params_.end() ? throw ZConfigException("Param string not found") : val = i->second;
 }

@@ -1,7 +1,8 @@
 #include <getopt.h>
-#include <zconfig.h>
+#include <zinit.h>
+#include <defaultconfig.h>
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int opt;
   ZConfig config;
 
@@ -21,5 +22,7 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
   }
-  config.load();
+  config.load(defaultconfig::params);
+  zbot::init(config);
+  exit(EXIT_SUCCESS);
 }
