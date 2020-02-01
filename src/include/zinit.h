@@ -2,5 +2,5 @@
 #include <zconfig.h>
 
 namespace zbot {
-void init(ZConfig& config);
+void init();
 } // namespace zbot

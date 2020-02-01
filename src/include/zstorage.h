@@ -8,12 +8,12 @@ class ZStorage {
 private:
   struct stat stat_buf_;
 
-  void checkDir();
   void createDir();
   int updateStat();
 
 protected:
   ZStorage() {};
+  void checkDir();
   std::string path_;
 
 public:
