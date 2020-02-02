@@ -10,4 +10,5 @@ void zbot::init() {
             "(unprivileged) user.\n",
             program_invocation_name);
   }
+  srand(time(NULL));
 }
