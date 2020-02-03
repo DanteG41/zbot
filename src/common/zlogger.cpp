@@ -3,20 +3,24 @@
 ZLogger::ZLogger(const char* c) : path_(c){};
 ZLogger::ZLogger(std::string s) : path_(s){};
 void ZLogger::operator<<(const char* c) {
-  if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
+  if (!logFile_.is_open()) open();
   logFile_ << formatting(LogLevel::INFO, c);
+  close();
 };
 void ZLogger::operator<<(std::string s) {
-  if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
+  if (!logFile_.is_open()) open();
   logFile_ << formatting(LogLevel::INFO, s.c_str());
+  close();
 };
 void ZLogger::write(LogLevel l, const char* c) {
-  if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
+  if (!logFile_.is_open()) open();
   logFile_ << formatting(l, c);
+  close();
 };
 void ZLogger::write(LogLevel l, std::string s) {
-  if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
+  if (!logFile_.is_open()) open();
   logFile_ << formatting(l, s.c_str());
+  close();
 };
 
 std::string ZLogger::formatting(LogLevel l, const char* c) {
@@ -44,10 +48,12 @@ std::string ZLogger::formatting(LogLevel l, const char* c) {
 
 void ZLogger::open() { logFile_.open(path_, std::fstream::app); };
 void ZLogger::open(const char* c) {
+  path_ = c;
   logFile_.open(c, std::fstream::app);
   if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
 };
 void ZLogger::open(std::string s) {
+  path_ = s;
   logFile_.open(s, std::fstream::app);
   if (!logFile_.is_open()) throw ZLoggerException("unable to open the log " + path_);
 };
