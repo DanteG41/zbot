@@ -9,15 +9,17 @@ private:
 public:
   enum LogLevel { INFO, WARNING, ERROR };
 
+  ZLogger() {};
   ZLogger(const char* c);
-  ZLogger(std::string c);
-  void create();
+  ZLogger(std::string s);
   void operator<<(const char* c);
   void operator<<(std::string s);
   void write(LogLevel l, const char* c);
   void write(LogLevel l, std::string s);
   std::string formatting(LogLevel l, const char* c);
   void open();
+  void open(const char* c);
+  void open(std::string s);
   void close();
   void reopen();
 };
