@@ -32,7 +32,7 @@ void zbot::setPidFile(std::string& f) {
 void zbot::setProcName(const char* procname) {
   int limit = 16;
   char buff[limit];
-  for (int i = 1; i < zbot::argc; i++) {
+  for (int i = 0; i < zbot::argc; i++) {
     for (int c = 0; zbot::progName[i][c] != '\0'; c++) {
       zbot::progName[i][c] = ' ';
     }
