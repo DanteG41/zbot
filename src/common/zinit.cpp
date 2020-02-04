@@ -6,6 +6,7 @@
 namespace zbot {
 ZLogger log;
 ZConfig mainConfig;
+char* progName;
 } // namespace zbot
 
 void zbot::init() {
@@ -65,9 +66,8 @@ int zbot::zwait(int& pid, int& start, siginfo_t& siginfo) {
   {
     zbot::log << "[MONITOR] Signal " + siginfo.si_signo;
     kill(pid, SIGTERM);
-    return 1;
+    return zbot::ChildSignal::CHILD_TERMINATE;
   }
-
   return 1;
 }
 
@@ -97,7 +97,6 @@ int zbot::zmonitor() {
     zbot::startWorker(botPid, botStatus, botNeedStart, zbot::workerBot);
     zbot::startWorker(senderPid, senderStatus, senderNeedStart, zbot::workerSender);
     sigwaitinfo(&sigset, &siginfo);
-    zbot::log << std::to_string(siginfo.si_pid);
     if (siginfo.si_pid == botPid) childStatus1 = zbot::zwait(botPid, botNeedStart, siginfo);
     if (siginfo.si_pid == senderPid)
       childStatus2 = zbot::zwait(senderPid, senderNeedStart, siginfo);
@@ -108,7 +107,6 @@ int zbot::zmonitor() {
     sleep(2);
   }
   status = childStatus1 + childStatus2;
-  // zbot::log.open();
   zbot::log << "[MONITOR] Stop. exit:" + std::to_string(status);
   unlink(pidFile.c_str());
   return status;
@@ -136,14 +134,20 @@ int zbot::zfork() {
 };
 
 int zbot::workerBot() {
-  zbot::log << "start bot worker";
-  sleep(2);
+  char childName[20];
+  strcpy(childName, "zbotd: telegram bot");
+  strcpy(progName, childName);
+  zbot::log << "start zbotd: telegram bot worker";
+  sleep(120);
   return zbot::ChildSignal::CHILD_RESTART;
-  //return zbot::ChildSignal::CHILD_TERMINATE;
+  // return zbot::ChildSignal::CHILD_TERMINATE;
 }
 int zbot::workerSender() {
-  sleep(2);
-  zbot::log << "start sender worker";
+  char childName[20];
+  strcpy(childName, "zbotd: sender");
+  strcpy(progName, childName);
+  zbot::log << "start zbotd: sender worker";
+  sleep(110);
   return zbot::ChildSignal::CHILD_RESTART;
-  //return zbot::ChildSignal::CHILD_TERMINATE;
+  // return zbot::ChildSignal::CHILD_TERMINATE;
 }

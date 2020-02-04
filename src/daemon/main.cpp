@@ -1,7 +1,8 @@
 #include <defaultconfig.h>
 #include <zinit.h>
 
-int main() {
+int main(int argc, char* argv[]) {
+  zbot::progName = argv[0];
   std::string logPath;
   zbot::mainConfig.load(defaultconfig::params);
   zbot::mainConfig.getParam("log_file", logPath);

@@ -11,6 +11,7 @@
 namespace zbot {
 extern ZLogger log;
 extern ZConfig mainConfig;
+extern char* progName;
 void init();
 int zfork();
 int zmonitor();
