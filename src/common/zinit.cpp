@@ -2,11 +2,13 @@
 #include <fstream>
 #include <wait.h>
 #include <zinit.h>
+#include <string>
 
 namespace zbot {
 ZLogger log;
 ZConfig mainConfig;
-char* progName;
+char** progName;
+int argc;
 } // namespace zbot
 
 void zbot::init() {
@@ -25,6 +27,19 @@ void zbot::setPidFile(std::string& f) {
   pidFile.open(f);
   pidFile << getpid();
   pidFile.close();
+}
+
+void zbot::setProcName(const char* procname) {
+  int limit = 16;
+  char buff[limit];
+  for (int i = 1; i < zbot::argc; i++) {
+    for (int c = 0; zbot::progName[i][c] != '\0'; c++) {
+      zbot::progName[i][c] = ' ';
+    }
+  }
+  strncpy(buff, procname,limit-1);
+  strncat(buff, "\0", 1);
+  strncpy(zbot::progName[0], buff, limit);
 }
 
 int zbot::startWorker(int& pid, int& status, int& start, int (*func)()) {
@@ -134,18 +149,16 @@ int zbot::zfork() {
 };
 
 int zbot::workerBot() {
-  char childName[20];
-  strcpy(childName, "zbotd: telegram bot");
-  strcpy(progName, childName);
+  zbot::setProcName("zbotd: bot");
   zbot::log << "start zbotd: telegram bot worker";
   sleep(120);
   return zbot::ChildSignal::CHILD_RESTART;
   // return zbot::ChildSignal::CHILD_TERMINATE;
 }
+
+
 int zbot::workerSender() {
-  char childName[20];
-  strcpy(childName, "zbotd: sender");
-  strcpy(progName, childName);
+  zbot::setProcName("zbotd: sender");
   zbot::log << "start zbotd: sender worker";
   sleep(110);
   return zbot::ChildSignal::CHILD_RESTART;
