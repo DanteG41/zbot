@@ -1,7 +1,11 @@
+#include <dirent.h>
 #include <fstream>
-#include <map>
 #include <hirschberg.h>
+#include <map>
+#include <sys/stat.h>
 #include <zmsgbox.h>
+
+#include <iostream>
 
 ZMsgBox::ZMsgBox(ZStorage& s, const char* c) : chatName_(c) {
   path_ = s.getPath() + "/" + chatName_;
@@ -30,6 +34,31 @@ void ZMsgBox::save() {
     msgFile << s;
     msgFile.close();
   }
+};
+
+void ZMsgBox::load() {
+  DIR* dirp = opendir(path_.c_str());
+  struct dirent* dp;
+  struct stat st;
+  std::string fullpath;
+
+  while ((dp = readdir(dirp)) != NULL) {
+    std::string message;
+    char c;
+    fullpath = path_ + "/" + dp->d_name;
+    stat(fullpath.c_str(), &st);
+    if (S_ISREG(st.st_mode)) {
+      // std::cout << fullpath << "\n";
+      std::ifstream msgFile;
+      msgFile.open(fullpath.c_str());
+
+      while (msgFile.get(c)) {
+        message.push_back(c);
+      }
+      messages_.push_back(message);
+    }
+  }
+  closedir(dirp);
 };
 
 void ZMsgBox::printMessage() {
