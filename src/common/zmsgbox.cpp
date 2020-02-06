@@ -94,11 +94,11 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
       std::pair<double, std::string> l;
       double dist;
       bool find = false;
-      if (k != v) {
+      if (&k != &v) {
         l    = levensteinDistance(k, v);
         dist = l.first / std::min(k.size(), v.size());
         similar sim(&v, l.second, dist);
-        if (dist < 0.4) {
+        if (dist < d) {
           if (temp.count(&k) == 0) {
             for (std::pair<std::string*, ZMsgBox::similar> p : temp) {
               if (p.second.storage == &k) find = 1;
