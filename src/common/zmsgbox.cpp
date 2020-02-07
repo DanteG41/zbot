@@ -64,8 +64,8 @@ void ZMsgBox::printMessage() {
   }
 }
 
-double levensteinDistance(std::string& s, std::string& t) {
-  double distance = 0;
+float levensteinDistance(std::string& s, std::string& t) {
+  float distance = 0;
   char *ops, *c;
 
   ops = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
@@ -86,8 +86,8 @@ std::string levensteinOps(std::string& s, std::string& t) {
   return editOperations;
 }
 
-std::vector<std::string> ZMsgBox::approximation(double d) {
-  std::multimap<std::string*, ZMsgBox::similar> temp;
+std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
+  std::multimap<std::string*, ZMsgBox::similar> similarmessages;
   std::pair<std::multimap<std::string*, ZMsgBox::similar>::iterator,
             std::multimap<std::string*, ZMsgBox::similar>::iterator>
       tempIter;
@@ -99,21 +99,34 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
 
   for (std::string& k : messages_) {
     for (std::string& v : messages_) {
-      std::pair<double, std::string> l;
-      double dist;
-      bool find = false;
+      float dist;
+      bool insert = false;
+      bool find   = false;
+
       if (&k != &v) {
         dist = levensteinDistance(k, v) / k.size();
         similar sim(&v, dist);
-        if (dist < d) {
-          if (temp.count(&k) == 0) {
-            for (std::pair<std::string*, ZMsgBox::similar> p : temp) {
-              if (p.second.storage == &k) find = 1;
+        if (dist < accuracy) {
+          if (!similarmessages.size()) insert = true;
+          for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = similarmessages.begin();
+               it != similarmessages.end(); it++) {
+            if ((it->first == &k and it->second.storage == &v) or
+                (it->first == &v and it->second.storage == &k))
+              continue;
+            if (it->first == &v) {
+              insert = false;
+              break;
             }
+            if (it->second.storage == &v) {
+              if (it->second.distance - dist > spread) {
+                similarmessages.erase(it);
+              } else
+                find = true;
+            }
+            insert = true;
           }
-          if (find != true) {
-            temp.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
-          }
+          if (insert and !find)
+            similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
         }
       }
     }
@@ -123,7 +136,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
   And collect unique keys. */
   for (std::string& s : messages_) {
     bool find = false;
-    for (std::pair<std::string*, ZMsgBox::similar> m : temp) {
+    for (std::pair<std::string*, ZMsgBox::similar> m : similarmessages) {
       if (m.first == &s or m.second.storage == &s) {
         find = true;
         keys.push_back(m.first);
@@ -136,7 +149,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
   keys.sort();
   keys.unique();
   for (std::string* s : keys) {
-    tempIter                  = temp.equal_range(s);
+    tempIter                  = similarmessages.equal_range(s);
     int maxLevensteinDistance = 0;
     int groupSize             = 1;
     std::string mostCommonPattern, prevPattern, editingOperations;
@@ -145,7 +158,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
     for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = tempIter.first;
          it != tempIter.second; ++it) {
       int unknownSeq = 0;
-      int si = 0;
+      int si         = 0;
 
       groupSize++;
       editingOperations = levensteinOps(mostCommonPattern, *it->second.storage);
@@ -163,7 +176,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
           si++;
           break;
         default:
-          mostCommonPattern.push_back(' ');
+          mostCommonPattern.push_back('?');
           break;
         }
       }
