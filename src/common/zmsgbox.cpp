@@ -5,8 +5,6 @@
 #include <sys/stat.h>
 #include <zmsgbox.h>
 
-#include <iostream>
-
 ZMsgBox::ZMsgBox(ZStorage& s, const char* c) : chatName_(c) {
   path_ = s.getPath() + "/" + chatName_;
   checkDir();
@@ -48,7 +46,6 @@ void ZMsgBox::load() {
     fullpath = path_ + "/" + dp->d_name;
     stat(fullpath.c_str(), &st);
     if (S_ISREG(st.st_mode)) {
-      // std::cout << fullpath << "\n";
       std::ifstream msgFile;
       msgFile.open(fullpath.c_str());
 
@@ -67,15 +64,26 @@ void ZMsgBox::printMessage() {
   }
 }
 
-std::pair<double, std::string> levensteinDistance(std::string& s, std::string& t) {
-  double distance;
-  std::string editOperations;
+double levensteinDistance(std::string& s, std::string& t) {
+  double distance = 0;
+  char *ops, *c;
 
-  editOperations = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
-  for (char c : editOperations) {
-    if (c != '=') distance++;
+  ops = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
+  for (c = ops; *c != '\0'; c++) {
+    if (*c != '=') distance++;
   }
-  return std::pair<double, std::string>(distance, editOperations);
+  free(ops);
+  return distance;
+}
+
+std::string levensteinOps(std::string& s, std::string& t) {
+  char* ops;
+  std::string editOperations;
+  ops            = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
+  editOperations = ops;
+
+  free(ops);
+  return editOperations;
 }
 
 std::vector<std::string> ZMsgBox::approximation(double d) {
@@ -95,8 +103,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
       double dist;
       bool find = false;
       if (&k != &v) {
-        l    = levensteinDistance(k, v);
-        dist = l.first / k.size();
+        dist = levensteinDistance(k, v) / k.size();
         similar sim(&v, dist);
         if (dist < d) {
           if (temp.count(&k) == 0) {
@@ -120,7 +127,6 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
       if (m.first == &s or m.second.storage == &s) {
         find = true;
         keys.push_back(m.first);
-        std::cout << ".";
       }
     }
     if (!find) result.push_back(s);
@@ -133,23 +139,20 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
     tempIter                  = temp.equal_range(s);
     int maxLevensteinDistance = 0;
     int groupSize             = 1;
-    std::string mostCommonPattern, prevPattern;
+    std::string mostCommonPattern, prevPattern, editingOperations;
     mostCommonPattern = *s;
-    std::cout << ".";
 
     for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = tempIter.first;
          it != tempIter.second; ++it) {
-      groupSize++;
-      std::cout << ".";
-      std::pair<double, std::string> ld;
-      ld             = levensteinDistance(mostCommonPattern, *it->second.storage);
       int unknownSeq = 0;
-      prevPattern    = mostCommonPattern;
-      std::cout << ".";
-      mostCommonPattern.erase();
       int si = 0;
-      for (int i = 0; i < ld.second.size(); i++) {
-        switch (ld.second[i]) {
+
+      groupSize++;
+      editingOperations = levensteinOps(mostCommonPattern, *it->second.storage);
+      prevPattern       = mostCommonPattern;
+      mostCommonPattern.erase();
+      for (int i = 0; i < editingOperations.size(); i++) {
+        switch (editingOperations[i]) {
         case '-':
         case '!':
           mostCommonPattern.push_back('?');
@@ -164,7 +167,6 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
           break;
         }
       }
-      std::cout << mostCommonPattern << "\n";
     }
 
     result.push_back("Received " + std::to_string(groupSize) +
