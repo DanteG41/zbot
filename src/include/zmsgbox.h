@@ -1,3 +1,5 @@
+#ifndef ZMSGBOX_H
+#define ZMSGBOX_H
 #include <list>
 #include <vector>
 #include <zstorage.h>
@@ -21,4 +23,6 @@ public:
   void pushMessage(std::string s);
   void printMessage();
   void save();
+  void load();
 };
+#endif // ZMSGBOX_H
