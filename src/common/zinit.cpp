@@ -12,6 +12,7 @@ int argc;
 } // namespace zbot
 
 void zbot::init() {
+  setlocale(LC_ALL, "");
   if (geteuid() == 0) {
     fprintf(stderr,
             "%s: cannot be run as root\n"
