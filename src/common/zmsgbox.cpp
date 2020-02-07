@@ -96,8 +96,8 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
       bool find = false;
       if (&k != &v) {
         l    = levensteinDistance(k, v);
-        dist = l.first / std::min(k.size(), v.size());
-        similar sim(&v, l.second, dist);
+        dist = l.first / k.size();
+        similar sim(&v, dist);
         if (dist < d) {
           if (temp.count(&k) == 0) {
             for (std::pair<std::string*, ZMsgBox::similar> p : temp) {
@@ -120,6 +120,7 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
       if (m.first == &s or m.second.storage == &s) {
         find = true;
         keys.push_back(m.first);
+        std::cout << ".";
       }
     }
     if (!find) result.push_back(s);
@@ -132,40 +133,42 @@ std::vector<std::string> ZMsgBox::approximation(double d) {
     tempIter                  = temp.equal_range(s);
     int maxLevensteinDistance = 0;
     int groupSize             = 1;
-    std::string mostCommonPattern, resultMessage;
+    std::string mostCommonPattern, prevPattern;
+    mostCommonPattern = *s;
+    std::cout << ".";
 
     for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = tempIter.first;
          it != tempIter.second; ++it) {
-      if (maxLevensteinDistance < it->second.distance) {
-        maxLevensteinDistance = it->second.distance;
-        mostCommonPattern     = it->second.pattern;
-        groupSize++;
+      groupSize++;
+      std::cout << ".";
+      std::pair<double, std::string> ld;
+      ld             = levensteinDistance(mostCommonPattern, *it->second.storage);
+      int unknownSeq = 0;
+      prevPattern    = mostCommonPattern;
+      std::cout << ".";
+      mostCommonPattern.erase();
+      int si = 0;
+      for (int i = 0; i < ld.second.size(); i++) {
+        switch (ld.second[i]) {
+        case '-':
+        case '!':
+          mostCommonPattern.push_back('?');
+          si++;
+          break;
+        case '=':
+          mostCommonPattern.push_back(prevPattern[si]);
+          si++;
+          break;
+        default:
+          mostCommonPattern.push_back(' ');
+          break;
+        }
       }
+      std::cout << mostCommonPattern << "\n";
     }
 
-    int si         = 0;
-    int unknownSeq = 0;
-
-    for (int i = 0; i < mostCommonPattern.size(); i++) {
-      switch (mostCommonPattern[i]) {
-      case '=':
-        resultMessage.push_back(s->at(si));
-        si++;
-        unknownSeq = 0;
-        break;
-      case '+':
-        if (unknownSeq < 3) resultMessage.push_back('?');
-        unknownSeq++;
-        break;
-      default:
-        if (unknownSeq < 3) resultMessage.push_back('?');
-        unknownSeq++;
-        si++;
-        break;
-      }
-    }
     result.push_back("Received " + std::to_string(groupSize) +
-                     " similar messages: " + resultMessage);
+                     " similar messages: " + mostCommonPattern);
   }
   return result;
 }

@@ -11,9 +11,8 @@ private:
   std::string hex_string(int l);
   struct similar {
     double distance;
-    std::string pattern;
     std::string* storage;
-    similar(std::string* s, std::string p, double d) : storage(s), pattern(p), distance(d){};
+    similar(std::string* s, double d) : storage(s), distance(d){};
   };
 
 public:

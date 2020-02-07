@@ -141,7 +141,7 @@ int zbot::zfork() {
   }
   umask(0);
   setsid();
-  chdir("/");
+  if (chdir("/")) zbot::log << "enter dir / ";
   close(STDIN_FILENO);
   close(STDOUT_FILENO);
   close(STDERR_FILENO);
