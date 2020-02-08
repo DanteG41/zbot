@@ -11,9 +11,9 @@ private:
   std::vector<std::string> files_;
   std::string hex_string(int l);
   struct similar {
-    double distance;
+    float distance;
     std::string* storage;
-    similar(std::string* s, double d) : storage(s), distance(d){};
+    similar(std::string* s, float d) : storage(s), distance(d){};
   };
 
 public:

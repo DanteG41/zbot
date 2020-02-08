@@ -126,7 +126,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
             }
             if (it->second.storage == &v) {
               if (it->second.distance - dist > spread) {
-                similarmessages.erase(it);
+                it = similarmessages.erase(it);
               } else
                 find = true;
             }
