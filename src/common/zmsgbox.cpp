@@ -102,7 +102,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
   std::list<std::string*> keys;
 
   /* Group similar messages where the Levenstein distance
-  less than the var d */
+  less than the var accuracy */
 
   for (std::string& k : messages_) {
     for (std::string& v : messages_) {
@@ -137,6 +137,29 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
         }
       }
     }
+  }
+
+  // Remove the keys got into values.
+  for (std::multimap<std::string*, ZMsgBox::similar>::iterator itk = similarmessages.begin();
+       itk != similarmessages.end(); itk++) {
+    bool remove = false;
+    for (std::multimap<std::string*, ZMsgBox::similar>::iterator itv = similarmessages.begin();
+         itv != similarmessages.end(); itv++) {
+      if (itv->second.storage == itk->first) {
+        if (itv->second.distance - itk->second.distance < spread) {
+          std::string* skey;
+          ZMsgBox::similar* kval;
+          skey   = itv->first;
+          kval   = &itk->second;
+          itv    = similarmessages.erase(itv);
+          remove = true;
+          similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(skey, *kval));
+        } else {
+          itv = similarmessages.erase(itv);
+        }
+      }
+    }
+    if (remove) itk = similarmessages.erase(itk);
   }
 
   /* Fill array with messages that cannot be approximated.
