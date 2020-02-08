@@ -8,6 +8,7 @@ class ZMsgBox : public ZStorage {
 private:
   const char* chatName_;
   std::vector<std::string> messages_;
+  std::vector<std::string> files_;
   std::string hex_string(int l);
   struct similar {
     double distance;
@@ -23,5 +24,6 @@ public:
   void printMessage();
   void save();
   void load();
+  void erase();
 };
 #endif // ZMSGBOX_H

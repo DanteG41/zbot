@@ -3,6 +3,7 @@
 #include <hirschberg.h>
 #include <map>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <zmsgbox.h>
 
 ZMsgBox::ZMsgBox(ZStorage& s, const char* c) : chatName_(c) {
@@ -48,7 +49,7 @@ void ZMsgBox::load() {
     if (S_ISREG(st.st_mode)) {
       std::ifstream msgFile;
       msgFile.open(fullpath.c_str());
-
+      files_.push_back(fullpath);
       while (msgFile.get(c)) {
         message.push_back(c);
       }
@@ -56,6 +57,12 @@ void ZMsgBox::load() {
     }
   }
   closedir(dirp);
+};
+
+void ZMsgBox::erase() {
+  for (std::string f : files_) {
+    unlink(f.c_str());
+  }
 };
 
 void ZMsgBox::printMessage() {
@@ -182,8 +189,8 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
       }
     }
 
-    result.push_back("Received " + std::to_string(groupSize) +
-                     " similar messages: " + mostCommonPattern);
+    result.push_back(std::to_string(groupSize) + " similar messages were received:\n" +
+                     mostCommonPattern);
   }
   return result;
 }
