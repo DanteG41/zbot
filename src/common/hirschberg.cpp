@@ -13,8 +13,6 @@
 
 using namespace stringmetric;
 
-int stringmetric::levenshtein(char a, char b) { return a != b; }
-
 /*
  * hirschberg calculates the global alignment of a and b with the
  * cost scheme f using Hirschberg's algorithm.  It returns the string
@@ -30,7 +28,7 @@ int stringmetric::levenshtein(char a, char b) { return a != b; }
  * to ENOMEM even on a successful return if the area allocated for the
  * alignment string could not be shrunk.
  */
-char* stringmetric::hirschberg(const char* a, const char* b, costfunc f) {
+char* stringmetric::hirschberg(const char* a, const char* b) {
   char *c, *d;
   size_t m = strlen(a);
   size_t n = strlen(b);
@@ -53,7 +51,7 @@ char* stringmetric::hirschberg(const char* a, const char* b, costfunc f) {
      * that insertion and deletion operators need to be
      * flipped.
      */
-    d = hirschberg_recursive(c, b, n, a, m, f);
+    d = hirschberg_recursive(c, b, n, a, m);
     c = (char*)tryrealloc(c, d - c + 1);
     for (d = c; *d != '\0'; d++) switch (*d) {
       case '+':
@@ -65,7 +63,7 @@ char* stringmetric::hirschberg(const char* a, const char* b, costfunc f) {
       }
     return c;
   }
-  d = hirschberg_recursive(c, a, m, b, n, f);
+  d = hirschberg_recursive(c, a, m, b, n);
   return (char*)tryrealloc(c, d - c + 1);
 }
 
@@ -77,15 +75,15 @@ char* stringmetric::hirschberg(const char* a, const char* b, costfunc f) {
  * written.  hirschberg_recursive returns a pointer to the null byte
  * written after the last alignment character.
  */
-static char* stringmetric::hirschberg_recursive(char* c, const char* a, size_t m, const char* b, size_t n,
-                                  costfunc f) {
+static char* stringmetric::hirschberg_recursive(char* c, const char* a, size_t m, const char* b,
+                                                size_t n) {
   if (n > 1) {
     size_t i, mmid, nmid;
     int lcost[m + 1], rcost[m + 1], tcost[m + 1];
 
     nmid = n / 2;
-    nwlcost(lcost, a, m, b, nmid, f);
-    nwrcost(rcost, a, m, b + nmid, n - nmid, f);
+    nwlcost(lcost, a, m, b, nmid);
+    nwrcost(rcost, a, m, b + nmid, n - nmid);
 
     mmid = 0;
     for (i = 0; i <= m; i++) {
@@ -93,11 +91,11 @@ static char* stringmetric::hirschberg_recursive(char* c, const char* a, size_t m
       if (tcost[i] < tcost[mmid]) mmid = i;
     }
 
-    c = hirschberg_recursive(c, a, mmid, b, nmid, f);
-    c = hirschberg_recursive(c, a + mmid, m - mmid, b + nmid, n - nmid, f);
+    c = hirschberg_recursive(c, a, mmid, b, nmid);
+    c = hirschberg_recursive(c, a + mmid, m - mmid, b + nmid, n - nmid);
     return c;
   } else
-    return nwalign(c, a, m, b, n, f);
+    return nwalign(c, a, m, b, n);
 }
 
 /*
@@ -109,25 +107,25 @@ static char* stringmetric::hirschberg_recursive(char* c, const char* a, size_t m
  * This function uses O(mn) space.  hirschberg_recursive guarantees its
  * own O(m) space usage by only calling this when n <= 1.
  */
-static char* stringmetric::nwalign(char* c, const char* a, size_t m, const char* b, size_t n, costfunc f) {
+static char* stringmetric::nwalign(char* c, const char* a, size_t m, const char* b, size_t n) {
   char* d;
   size_t i, j;
   int s[m + 1][n + 1];
 
   s[0][0] = 0;
-  for (i = 1; i <= m; i++) s[i][0] = s[i - 1][0] + f(a[i - 1], 0);
-  for (j = 1; j <= n; j++) s[0][j] = s[0][j - 1] + f(0, b[j - 1]);
+  for (i = 1; i <= m; i++) s[i][0] = s[i - 1][0] + 1;
+  for (j = 1; j <= n; j++) s[0][j] = s[0][j - 1] + 1;
   for (j = 1; j <= n; j++)
     for (i = 1; i <= m; i++) {
       int cost[3] = {s[i - 1][j], s[i - 1][j - 1], s[i][j - 1]};
-      s[i][j]     = cost[nwmin(cost, a[i - 1], b[j - 1], f)];
+      s[i][j]     = cost[nwmin(cost, a[i - 1], b[j - 1])];
     }
   i = m;
   j = n;
   d = c;
   while (i > 0 && j > 0) {
     int cost[3] = {s[i - 1][j], s[i - 1][j - 1], s[i][j - 1]};
-    switch (nwmin(cost, a[i - 1], b[j - 1], f)) {
+    switch (nwmin(cost, a[i - 1], b[j - 1])) {
     case Del:
       *d++ = '-';
       i--;
@@ -154,18 +152,18 @@ static char* stringmetric::nwalign(char* c, const char* a, size_t m, const char*
  * nwlcost stores the last column of the Needleman-Wunsch alignment
  * cost matrix of a and b into s.
  */
-static void stringmetric::nwlcost(int* s, const char* a, size_t m, const char* b, size_t n, costfunc f) {
+static void stringmetric::nwlcost(int* s, const char* a, size_t m, const char* b, size_t n) {
   size_t i, j;
   int ss, tmp;
 
   s[0] = 0;
-  for (i = 1; i <= m; i++) s[i] = s[i - 1] + f(a[i - 1], 0);
+  for (i = 1; i <= m; i++) s[i] = s[i - 1] + 1;
   for (j = 1; j <= n; j++) {
     ss = s[0];
-    s[0] += f(0, b[j - 1]);
+    s[0]++;
     for (i = 1; i <= m; i++) {
       int cost[3] = {s[i - 1], ss, s[i]};
-      tmp         = cost[nwmin(cost, a[i - 1], b[j - 1], f)];
+      tmp         = cost[nwmin(cost, a[i - 1], b[j - 1])];
       ss          = s[i];
       s[i]        = tmp;
     }
@@ -177,18 +175,18 @@ static void stringmetric::nwlcost(int* s, const char* a, size_t m, const char* b
  * that is, matching their suffixes rather than prefixes.  The last
  * column of this alignment cost matrix is stored into s.
  */
-static void stringmetric::nwrcost(int* s, const char* a, size_t m, const char* b, size_t n, costfunc f) {
+static void stringmetric::nwrcost(int* s, const char* a, size_t m, const char* b, size_t n) {
   ssize_t i, j;
   int ss, tmp;
 
   s[m] = 0;
-  for (i = m - 1; i >= 0; i--) s[i] = s[i + 1] + f(a[i], 0);
+  for (i = m - 1; i >= 0; i--) s[i] = s[i + 1] + 1;
   for (j = n - 1; j >= 0; j--) {
     ss = s[m];
-    s[m] += f(0, b[j]);
+    s[m]++;
     for (i = m - 1; i >= 0; i--) {
       int cost[3] = {s[i + 1], ss, s[i]};
-      tmp         = cost[nwmin(cost, a[i], b[j], f)];
+      tmp         = cost[nwmin(cost, a[i], b[j])];
       ss          = s[i];
       s[i]        = tmp;
     }
@@ -202,12 +200,13 @@ static void stringmetric::nwrcost(int* s, const char* a, size_t m, const char* b
  * in the cost array in that order.  The cost array is modified by
  * adding the edit costs for a and b to the appropriate cells.
  */
-static editop stringmetric::nwmin(int cost[3], char a, char b, costfunc f) {
+static editop stringmetric::nwmin(int cost[3], char a, char b) {
   editop i;
 
-  cost[Del] += f(a, 0);
-  cost[Sub] += f(a, b);
-  cost[Ins] += f(0, b);
+  cost[Del]++;
+  cost[Ins]++;
+  cost[Sub] += (a != b);
+
   i = cost[Del] < cost[Sub] ? Del : Sub;
   i = cost[i] < cost[Ins] ? i : Ins;
   return i;

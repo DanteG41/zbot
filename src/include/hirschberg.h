@@ -16,12 +16,6 @@ namespace stringmetric {
 typedef int (*costfunc)(char, char);
 
 /*
- * levenshtein is the common cost scheme for edit distance: matches cost
- * nothing, while mismatches, insertions and deletions cost one each.
- */
-int levenshtein(char, char);
-
-/*
  * The recursive step in the Needleman-Wunsch algorithm involves
  * choosing the cheapest operation out of three possibilities.  We
  * store the costs of the three operations into an array and use the
@@ -34,13 +28,13 @@ typedef enum {
   Ins = 2,
 } editop;
 
-char* hirschberg(const char*, const char*, costfunc);
-static char* hirschberg_recursive(char* c, const char* a, size_t m, const char* b, size_t n,
-                                  costfunc f);
-static char* nwalign(char*, const char*, size_t, const char*, size_t, costfunc);
-static void nwlcost(int*, const char*, size_t, const char*, size_t, costfunc);
-static void nwrcost(int*, const char*, size_t, const char*, size_t, costfunc);
-static editop nwmin(int[3], char, char, costfunc);
+char* hirschberg(const char*, const char*);
+static char* hirschberg_recursive(char* c, const char* a, size_t m, const char* b, size_t n
+                                  );
+static char* nwalign(char*, const char*, size_t, const char*, size_t);
+static void nwlcost(int*, const char*, size_t, const char*, size_t);
+static void nwrcost(int*, const char*, size_t, const char*, size_t);
+static editop nwmin(int[3], char, char);
 static void memrev(void*, size_t);
 static void* tryrealloc(void*, size_t);
 

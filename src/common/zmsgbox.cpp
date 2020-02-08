@@ -75,7 +75,7 @@ float levensteinDistance(std::string& s, std::string& t) {
   float distance = 0;
   char *ops, *c;
 
-  ops = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
+  ops = stringmetric::hirschberg(s.c_str(), t.c_str());
   for (c = ops; *c != '\0'; c++) {
     if (*c != '=') distance++;
   }
@@ -86,7 +86,7 @@ float levensteinDistance(std::string& s, std::string& t) {
 std::string levensteinOps(std::string& s, std::string& t) {
   char* ops;
   std::string editOperations;
-  ops            = stringmetric::hirschberg(s.c_str(), t.c_str(), stringmetric::levenshtein);
+  ops            = stringmetric::hirschberg(s.c_str(), t.c_str());
   editOperations = ops;
 
   free(ops);
