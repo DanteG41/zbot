@@ -65,6 +65,8 @@ void ZMsgBox::erase() {
   }
 };
 
+int ZMsgBox::size() { return messages_.size(); }
+
 void ZMsgBox::printMessage() {
   for (std::string s : messages_) {
     fprintf(stdout, "%s", s.c_str());
