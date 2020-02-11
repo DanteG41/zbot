@@ -1,3 +1,6 @@
 [submodule "libs/simpleini"]
 	path = libs/simpleini
 	url = git@github.com:brofield/simpleini.git
+[submodule "libs/tgbot"]
+	path = libs/tgbot
+	url = git@github.com:reo7sp/tgbot-cpp.git
