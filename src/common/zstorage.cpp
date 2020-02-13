@@ -22,7 +22,7 @@ void ZStorage::checkDir() {
 }
 
 void ZStorage::createDir() {
-  if (mkdir(path_.c_str(), 0750) != 0) {
+  if (mkdir(path_.c_str(), 0766) != 0) {
     if (errno == EEXIST) {
       fprintf(stderr, "Dir %s exists. Error: %d\n", path_.c_str(), errno);
     } else {
