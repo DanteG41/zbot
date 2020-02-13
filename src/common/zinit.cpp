@@ -1,8 +1,10 @@
+#include <chrono>
 #include <cstring>
 #include <fstream>
+#include <string>
 #include <wait.h>
 #include <zinit.h>
-#include <string>
+#include <ztbot.h>
 
 namespace zbot {
 ZLogger log;
@@ -20,12 +22,15 @@ void zbot::init() {
             "(unprivileged) user.\n",
             program_invocation_name);
   }
-  srand(time(NULL));
+  auto t0      = std::chrono::high_resolution_clock::now();
+  auto nanosec = t0.time_since_epoch();
+  srand(nanosec.count());
 }
 
 void zbot::setPidFile(std::string& f) {
   std::ofstream pidFile;
   pidFile.open(f);
+  if (!pidFile.is_open()) exit(EXIT_FAILURE);
   pidFile << getpid();
   pidFile.close();
 }
@@ -38,7 +43,7 @@ void zbot::setProcName(const char* procname) {
       zbot::progName[i][c] = ' ';
     }
   }
-  strncpy(buff, procname,limit-1);
+  strncpy(buff, procname, limit - 1);
   strncat(buff, "\0", 1);
   strncpy(zbot::progName[0], buff, limit);
 }
@@ -94,10 +99,7 @@ int zbot::zmonitor() {
   int senderNeedStart = 1;
   int botNeedStart    = 1;
   std::string pidFile;
-  ZConfig config;
   zbot::mainConfig.getParam("pid_file", pidFile);
-
-  setPidFile(pidFile);
 
   sigset_t sigset;
   siginfo_t siginfo;
@@ -124,7 +126,6 @@ int zbot::zmonitor() {
   }
   status = childStatus1 + childStatus2;
   zbot::log << "[MONITOR] Stop. exit:" + std::to_string(status);
-  unlink(pidFile.c_str());
   return status;
 }
 
@@ -153,15 +154,60 @@ int zbot::workerBot() {
   zbot::setProcName("zbotd: bot");
   zbot::log << "start zbotd: telegram bot worker";
   sleep(120);
-  return zbot::ChildSignal::CHILD_RESTART;
-  // return zbot::ChildSignal::CHILD_TERMINATE;
+  // return zbot::ChildSignal::CHILD_RESTART;
+  return zbot::ChildSignal::CHILD_TERMINATE;
 }
-
 
 int zbot::workerSender() {
   zbot::setProcName("zbotd: sender");
   zbot::log << "start zbotd: sender worker";
-  sleep(110);
-  return zbot::ChildSignal::CHILD_RESTART;
-  // return zbot::ChildSignal::CHILD_TERMINATE;
+
+  std::string path, token;
+  int maxmessages, minapprox, wait;
+  float accuracy, spread;
+  ZConfig telegramConfig;
+  std::vector<std::string> messages;
+
+  telegramConfig.configFile = mainConfig.configFile;
+  telegramConfig.load("telegram", defaultconfig::telegramParams);
+  telegramConfig.getParam("token", token);
+  mainConfig.getParam("storage", path);
+  mainConfig.getParam("max_messages", maxmessages);
+  mainConfig.getParam("min_approx", minapprox);
+  mainConfig.getParam("accuracy", accuracy);
+  mainConfig.getParam("spread", spread);
+  mainConfig.getParam("wait", wait);
+  ZStorage zbotStorage(path);
+  ZStorage pendingStorage(path + "/pending");
+  ZStorage processingStorage(path + "/processing");
+  Ztbot tbot(token);
+  while (true) {
+    sleep(wait);
+    try {
+      for (std::string chat : pendingStorage.listChats()) {
+        ZMsgBox sendBox(pendingStorage, chat.c_str());
+        sendBox.load(maxmessages);
+        sendBox.move(processingStorage);
+        if (sendBox.size() > minapprox) {
+          messages = sendBox.approximation(accuracy, spread);
+        } else {
+          messages = sendBox.popMessages();
+        }
+        for (std::string msg : messages) {
+          tbot.send(atoi(chat.c_str()), msg);
+        }
+        sendBox.erase();
+      }
+    } catch (ZStorageException& e) {
+      zbot::log.write(ZLogger::LogLevel::ERROR, e.getError());
+      continue;
+    } catch (TgBot::TgException& e) {
+      std::string err = "TgBot exception: ";
+      err += e.what();
+      zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      continue;
+    }
+  }
+  // return zbot::ChildSignal::CHILD_RESTART;
+  return zbot::ChildSignal::CHILD_TERMINATE;
 }

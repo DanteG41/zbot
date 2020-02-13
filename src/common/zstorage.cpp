@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <iostream>
 #include <unistd.h>
 #include <zstorage.h>
@@ -33,3 +34,22 @@ void ZStorage::createDir() {
   }
   updateStat();
 }
+
+std::vector<std::string> ZStorage::listChats() {
+  DIR* dirp = opendir(path_.c_str());
+  struct dirent* dp;
+  struct stat st;
+  std::string fullpath;
+  std::vector<std::string> result;
+
+  while ((dp = readdir(dirp)) != NULL) {
+    std::string dir = dp->d_name;
+    fullpath = path_ + "/" + dp->d_name;
+    stat(fullpath.c_str(), &st);
+    if (S_ISDIR(st.st_mode) and dir != "." and dir != "..") {
+      result.push_back(dir);
+    }
+  }
+  closedir(dirp);
+  return result;
+};

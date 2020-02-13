@@ -1,4 +1,3 @@
-#include <defaultconfig.h>
 #include <getopt.h>
 #include <zinit.h>
 #include <zmsgbox.h>

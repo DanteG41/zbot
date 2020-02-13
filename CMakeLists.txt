@@ -3,15 +3,6 @@ project(test.out)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GTK_CFLAGS} -g")
 
-set(SOURCES src/common/hirschberg.cpp 
-	src/common/zconfig.cpp 
-	src/common/zinit.cpp 
-	src/common/zlogger.cpp 
-	src/common/zmsgbox.cpp 
-	src/common/zstorage.cpp 
-	src/common/ztbot.cpp)
-add_executable(${PROJECT_NAME} src/test.cpp ${SOURCES})	
-
 include_directories(libs
 	src/include
 	libs/tgbot/include)
@@ -34,5 +25,6 @@ add_subdirectory(libs/tgbot)
 add_subdirectory(src/common)
 add_subdirectory(src/cli)
 add_subdirectory(src/daemon)
+add_executable(${PROJECT_NAME} src/test.cpp)
 
 target_link_libraries(${PROJECT_NAME} ${LIB_LIST})

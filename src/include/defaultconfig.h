@@ -4,11 +4,8 @@
 #include <string>
 
 namespace defaultconfig {
-std::map<std::string, std::string> params         = {{"storage", "/var/spool/zbot"},
-                                             {"log_file", "/var/log/zbot.log"},
-                                             {"pid_file", "/var/run/zbot.pid"},
-                                             {"wait", "10"}};
-std::map<std::string, std::string> zabbixParams   = {{"zabbix_server", "127.0.0.1"}};
-std::map<std::string, std::string> telegramParams = {{"token", "*token*"}};
+extern std::map<std::string, std::string> params;
+extern std::map<std::string, std::string> zabbixParams;
+extern std::map<std::string, std::string> telegramParams;
 } // namespace defaultconfig
 #endif // DEFAULTCONFIG_H

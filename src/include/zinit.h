@@ -7,6 +7,7 @@
 #include <zconfig.h>
 #include <zlogger.h>
 #include <zmsgbox.h>
+#include <defaultconfig.h>
 
 namespace zbot {
 extern ZLogger log;

@@ -25,7 +25,7 @@ std::string ZMsgBox::hex_string(int l) {
   }
   return str;
 }
-
+#include <iostream>
 void ZMsgBox::save() {
   for (std::string s : messages_) {
     std::ofstream msgFile;
@@ -35,13 +35,13 @@ void ZMsgBox::save() {
   }
 };
 
-void ZMsgBox::load() {
+void ZMsgBox::load(int maxMessage) {
   DIR* dirp = opendir(path_.c_str());
   struct dirent* dp;
   struct stat st;
   std::string fullpath;
 
-  while ((dp = readdir(dirp)) != NULL) {
+  for (int i = 0; (dp = readdir(dirp)) != NULL and i < maxMessage; i++) {
     std::string message;
     char c;
     fullpath = path_ + "/" + dp->d_name;
@@ -49,7 +49,7 @@ void ZMsgBox::load() {
     if (S_ISREG(st.st_mode)) {
       std::ifstream msgFile;
       msgFile.open(fullpath.c_str());
-      files_.push_back(fullpath);
+      files_.push_back(dp->d_name);
       while (msgFile.get(c)) {
         message.push_back(c);
       }
@@ -59,9 +59,27 @@ void ZMsgBox::load() {
   closedir(dirp);
 };
 
+void ZMsgBox::move(ZStorage& s) {
+  ZMsgBox tmpBox(s, chatName_);
+  for (std::string f : files_) {
+    std::string oldfile, newfile;
+    oldfile = path_ + "/" + f;
+    newfile = tmpBox.getPath() + "/" + f;
+    rename(oldfile.c_str(), newfile.c_str());
+  }
+  path_ = tmpBox.getPath();
+};
+
 void ZMsgBox::erase() {
   for (std::string f : files_) {
-    unlink(f.c_str());
+    struct stat st;
+    std::string fullpath = path_ + "/" + f;
+    stat(fullpath.c_str(), &st);
+    if (S_ISREG(st.st_mode)) {
+      unlink(fullpath.c_str());
+    } else {
+      throw ZStorageException("unable to delete the message file " + fullpath);
+    }
   }
 };
 
@@ -72,6 +90,8 @@ void ZMsgBox::printMessage() {
     fprintf(stdout, "%s", s.c_str());
   }
 }
+
+std::vector<std::string> ZMsgBox::popMessages() { return messages_; };
 
 float levensteinDistance(std::string& s, std::string& t) {
   float distance = 0;

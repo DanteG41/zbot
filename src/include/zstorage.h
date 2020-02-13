@@ -2,6 +2,7 @@
 #define ZSTORAGE_H
 
 #include <string>
+#include <vector>
 #include <sys/stat.h>
 
 class ZStorage {
@@ -18,6 +19,7 @@ protected:
 
 public:
   std::string getPath() { return path_; };
+  std::vector<std::string> listChats();
   ZStorage(std::string c) : path_(c) { checkDir(); };
 };
 

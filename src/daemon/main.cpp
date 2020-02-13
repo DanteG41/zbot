@@ -1,5 +1,4 @@
 #include <cstring>
-#include <defaultconfig.h>
 #include <zinit.h>
 
 int main(int argc, char* argv[]) {

@@ -15,6 +15,7 @@ public:
   void load(const char* sectionName, std::map<std::string, std::string>& p);
   void getParam(const char* name, int&);
   void getParam(const char* name, std::string&);
+  void getParam(const char* name, float& val);
 };
 
 class ZConfigException {
