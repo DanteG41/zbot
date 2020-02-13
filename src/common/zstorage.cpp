@@ -22,13 +22,14 @@ void ZStorage::checkDir() {
 }
 
 void ZStorage::createDir() {
-  if (mkdir(path_.c_str(), 2770) != 0) {
+  if (mkdir(path_.c_str(), (S_ISGID | S_IRWXU | S_IRWXG)) != 0) {
     if (errno == EEXIST) {
       fprintf(stderr, "Dir %s exists. Error: %d\n", path_.c_str(), errno);
     } else {
       throw ZStorageException("cannot create directory " + path_);
     }
   }
+  chmod(path_.c_str(), (S_ISGID | S_IRWXU | S_IRWXG));
   updateStat();
 }
 
