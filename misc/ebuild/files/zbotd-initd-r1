@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+# Copyright 1999-2020 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+
+description="zbotd - the zabbix bot daemon"
+pidfile="/var/run/zbotd.pid"
+command="/usr/bin/zbotd"
+command_args="${CONFIG_FILE}"
+command_user="zbot:zbot"
+start_stop_daemon_args="--pidfile ${pidfile}"
+
+depend() {
+	use net dns
+}
+
+start_pre() {
+        if [ ! -f ${CONFIG_FILE} ] ; then
+                eerror "Please create ${CONFIG_FILE}"
+                return 1
+        fi
+        return 0
+}
