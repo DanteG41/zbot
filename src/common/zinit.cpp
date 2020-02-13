@@ -21,6 +21,7 @@ void zbot::init() {
             "Please log in (using, e.g., \"su\") as the "
             "(unprivileged) user.\n",
             program_invocation_name);
+    exit(EXIT_FAILURE);
   }
   auto t0      = std::chrono::high_resolution_clock::now();
   auto nanosec = t0.time_since_epoch();
