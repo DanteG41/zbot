@@ -16,13 +16,13 @@ void ZStorage::checkDir() {
   if (!S_ISDIR(stat_buf_.st_mode)) {
     throw ZStorageException("specified data directory \"" + path_ + "\" is not a directory");
   }
-  if (stat_buf_.st_mode & (S_IXGRP | S_IXOTH)) {
-    throw ZStorageException("data directory \"" + path_ + "\" permissions should be u=rwx (0766)");
+  if (stat_buf_.st_mode & (05007)) {
+    throw ZStorageException("data directory \"" + path_ + "\" permissions should be u=rwx (2770)");
   }
 }
 
 void ZStorage::createDir() {
-  if (mkdir(path_.c_str(), 0766) != 0) {
+  if (mkdir(path_.c_str(), 2770) != 0) {
     if (errno == EEXIST) {
       fprintf(stderr, "Dir %s exists. Error: %d\n", path_.c_str(), errno);
     } else {
