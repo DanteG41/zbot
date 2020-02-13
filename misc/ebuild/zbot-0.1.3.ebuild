@@ -38,7 +38,7 @@ pkg_postinst() {
 			ewarn "You must create /var/spool/zbot directory"
 			ewarn "that is writable for the zbot user, or "
 			ewarn "specify a different directory in zbot.ini"
-			ewarn "permissions should be u=rwx (0750)"
+			ewarn "permissions should be u=rwx (0766)"
 			ewarn
 	fi
 }

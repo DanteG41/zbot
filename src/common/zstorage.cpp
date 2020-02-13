@@ -16,11 +16,8 @@ void ZStorage::checkDir() {
   if (!S_ISDIR(stat_buf_.st_mode)) {
     throw ZStorageException("specified data directory \"" + path_ + "\" is not a directory");
   }
-  if (stat_buf_.st_uid != geteuid()) {
-    throw ZStorageException("data directory \"" + path_ + "\" has wrong ownership");
-  }
-  if (stat_buf_.st_mode & (S_IWGRP | S_IRWXO)) {
-    throw ZStorageException("data directory \"" + path_ + "\" permissions should be u=rwx (0750)");
+  if (stat_buf_.st_mode & (S_IXGRP | S_IXOTH)) {
+    throw ZStorageException("data directory \"" + path_ + "\" permissions should be u=rwx (0766)");
   }
 }
 
