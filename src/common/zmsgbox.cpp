@@ -29,7 +29,9 @@ std::string ZMsgBox::hex_string(int l) {
 void ZMsgBox::save() {
   for (std::string s : messages_) {
     std::ofstream msgFile;
-    msgFile.open(path_ + "/" + hex_string(16));
+    std::string file = path_ + "/" + hex_string(16);
+    msgFile.open(file);
+    if (!msgFile.is_open()) throw ZStorageException("unable to create a file " + file);
     msgFile << s;
     msgFile.close();
   }
