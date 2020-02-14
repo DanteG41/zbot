@@ -1,31 +1,27 @@
-# [](https://github.com/DanteG41/zbot/compare/v0.1.3...v) (2020-02-13)
+# [](https://github.com/DanteG41/zbot/compare/v0.1.8...v) (2020-02-14)
 
 
 
-## [0.1.3](https://github.com/DanteG41/zbot/compare/v0.1.2...v0.1.3) (2020-02-13)
-
-
-### Bug Fixes
-
-* **cmake:** static linking with TgBot ([f191dd2](https://github.com/DanteG41/zbot/commit/f191dd242901cfa0ddc5ab50d903c140ca4db91c))
-
-
-
-## [0.1.2](https://github.com/DanteG41/zbot/compare/v0.1.1...v0.1.2) (2020-02-13)
+## [0.1.8](https://github.com/DanteG41/zbot/compare/v0.1.0...v0.1.8) (2020-02-14)
 
 
 ### Bug Fixes
 
+* **all:** exit if root user ([3258f19](https://github.com/DanteG41/zbot/commit/3258f1971a35e883d38723113d0f87c9b2e4b810))
+* **cli:** changing rights ([a285209](https://github.com/DanteG41/zbot/commit/a285209abd778d203968cf36f646d9dfe2af93f9))
 * **cmake:** remove test ([60b1d69](https://github.com/DanteG41/zbot/commit/60b1d698535bc349241fec69f984a715c7cd6591))
-
-
-
-## [0.1.1](https://github.com/DanteG41/zbot/compare/v0.1.0...v0.1.1) (2020-02-13)
-
-
-### Bug Fixes
-
+* **cmake:** static linking with TgBot ([f191dd2](https://github.com/DanteG41/zbot/commit/f191dd242901cfa0ddc5ab50d903c140ca4db91c))
 * **submodule:** via HTTPS ([6c63757](https://github.com/DanteG41/zbot/commit/6c63757a76b894ce9c29e3839309b12a8502887d))
+* **zstorage:** additional chmod on create ([b222351](https://github.com/DanteG41/zbot/commit/b222351e169fcfee735d66550e00b9f1fd0de6cf))
+* **zstorage:** create with 2770 perm ([141f31c](https://github.com/DanteG41/zbot/commit/141f31c9f283f537108ae56dc74b5f15adaa59fd))
+* ~~**zstorage:** create with 766 perm ([e28dff5](https://github.com/DanteG41/zbot/commit/e28dff5d81bcbaeeaf4d5f97aadf4da96bdc9754))~~
+* send to supergroup ([3100e6a](https://github.com/DanteG41/zbot/commit/3100e6a93a14f05afb1920e572351f2c53eeadbb))
+
+
+### Features
+
+* **daemon:** set pid file ([8dc095e](https://github.com/DanteG41/zbot/commit/8dc095e3cc786557846ab9f384f578f97ad8c316))
+* ~~**ebuild:** add v.0.1.3 ([c444246](https://github.com/DanteG41/zbot/commit/c444246d439abac1ede5436941aebb93548c4e22))~~
 
 
 
