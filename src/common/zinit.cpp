@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstring>
+#include <execinfo.h>
 #include <fstream>
 #include <string>
 #include <wait.h>
@@ -83,15 +84,6 @@ int zbot::zwait(int& pid, int& start, siginfo_t& siginfo) {
       zbot::log << "[MONITOR] Child restart";
       start = 1;
     }
-  } else if (siginfo.si_signo == SIGUSR1) // reload config
-  {
-    kill(pid, SIGUSR1); // send to child
-    start = 0;
-  } else // other signal
-  {
-    zbot::log << "[MONITOR] Signal " + siginfo.si_signo;
-    kill(pid, SIGTERM);
-    return zbot::ChildSignal::CHILD_TERMINATE;
   }
   return 1;
 }
@@ -121,9 +113,27 @@ int zbot::zmonitor() {
     zbot::startWorker(botPid, botStatus, botNeedStart, zbot::workerBot);
     zbot::startWorker(senderPid, senderStatus, senderNeedStart, zbot::workerSender);
     sigwaitinfo(&sigset, &siginfo);
-    if (siginfo.si_pid == botPid) childStatus1 = zbot::zwait(botPid, botNeedStart, siginfo);
-    if (siginfo.si_pid == senderPid)
+    if (siginfo.si_pid == botPid)
+      childStatus1 = zbot::zwait(botPid, botNeedStart, siginfo);
+    else if (siginfo.si_pid == senderPid)
       childStatus2 = zbot::zwait(senderPid, senderNeedStart, siginfo);
+    else {
+      if (siginfo.si_signo == SIGUSR1) // reload config
+      {
+        zbot::log << "[MONITOR] Signal " + std::to_string(siginfo.si_signo);
+        zbot::log << "[MONITOR] reload config. ";
+        mainConfig.load(defaultconfig::params);
+        kill(botPid, SIGUSR1);
+        kill(senderPid, SIGUSR1);
+        botNeedStart    = 0;
+        senderNeedStart = 0;
+      } else { // other signal
+        zbot::log << "[MONITOR] Signal " + std::to_string(siginfo.si_signo);
+        kill(botPid, SIGTERM);
+        kill(senderPid, SIGTERM);
+        return zbot::ChildSignal::CHILD_TERMINATE;
+      }
+    }
     if (childStatus1 == zbot::ChildSignal::CHILD_TERMINATE &&
         childStatus2 == zbot::ChildSignal::CHILD_TERMINATE) {
       break;
@@ -160,43 +170,80 @@ int zbot::zfork() {
 int zbot::workerBot() {
   zbot::setProcName("zbotd: bot");
   zbot::log << "start zbotd: telegram bot worker";
-  sleep(120);
+  sleep(5);
   // return zbot::ChildSignal::CHILD_RESTART;
   return zbot::ChildSignal::CHILD_TERMINATE;
 }
 
+void zbot::senderGetParams(ZConfig& zc, zbot::config& c) {
+  zc.getParam("token", c.token);
+  mainConfig.getParam("storage", c.path);
+  mainConfig.getParam("max_messages", c.maxmessages);
+  mainConfig.getParam("min_approx", c.minapprox);
+  mainConfig.getParam("accuracy", c.accuracy);
+  mainConfig.getParam("spread", c.spread);
+  mainConfig.getParam("wait", c.wait);
+}
+
 int zbot::workerSender() {
   zbot::setProcName("zbotd: sender");
-  zbot::log << "start zbotd: sender worker";
+  zbot::log << "zbotd: start sender worker";
 
-  std::string path, token;
-  int maxmessages, minapprox, wait;
-  float accuracy, spread;
   ZConfig telegramConfig;
   std::vector<std::string> messages;
+  config configSender;
 
   telegramConfig.configFile = mainConfig.configFile;
   telegramConfig.load("telegram", defaultconfig::telegramParams);
-  telegramConfig.getParam("token", token);
-  mainConfig.getParam("storage", path);
-  mainConfig.getParam("max_messages", maxmessages);
-  mainConfig.getParam("min_approx", minapprox);
-  mainConfig.getParam("accuracy", accuracy);
-  mainConfig.getParam("spread", spread);
-  mainConfig.getParam("wait", wait);
-  ZStorage zbotStorage(path);
-  ZStorage pendingStorage(path + "/pending");
-  ZStorage processingStorage(path + "/processing");
-  Ztbot tbot(token);
+  zbot::senderGetParams(telegramConfig, configSender);
+  ZStorage zbotStorage(configSender.path);
+  ZStorage pendingStorage(configSender.path + "/pending");
+  ZStorage processingStorage(configSender.path + "/processing");
+
+  struct sigaction sigact;
+  siginfo_t siginfo;
+  sigset_t sigset;
+
+  sigact.sa_flags     = SA_SIGINFO;
+  sigact.sa_sigaction = zbot::signal_error;
+
+  sigemptyset(&sigact.sa_mask);
+
+  sigaction(SIGFPE, &sigact, 0);
+  sigaction(SIGILL, &sigact, 0);
+  sigaction(SIGSEGV, &sigact, 0);
+  sigaction(SIGBUS, &sigact, 0);
+
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGQUIT);
+  sigaddset(&sigset, SIGINT);
+  sigaddset(&sigset, SIGTERM);
+  sigaddset(&sigset, SIGUSR1);
+  sigprocmask(SIG_BLOCK, &sigset, NULL);
+
   while (true) {
-    sleep(wait);
+    struct timespec timeout;
+    timeout.tv_sec  = configSender.wait;
+    timeout.tv_nsec = 0;
+
+    if (sigtimedwait(&sigset, &siginfo, &timeout) > 0) {
+      if (siginfo.si_signo == SIGUSR1) {
+        telegramConfig.load("telegram", defaultconfig::telegramParams);
+        mainConfig.load(defaultconfig::params);
+        zbot::senderGetParams(telegramConfig, configSender);
+        zbot::log << "zbotd sender: reload config";
+      } else if (siginfo.si_signo == SIGTERM) {
+        exit(zbot::ChildSignal::CHILD_TERMINATE);
+      }
+    }
     try {
+      Ztbot tbot(configSender.token);
       for (std::string chat : pendingStorage.listChats()) {
         ZMsgBox sendBox(pendingStorage, chat.c_str());
-        sendBox.load(maxmessages);
+        sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
-        if (sendBox.size() > minapprox) {
-          messages = sendBox.approximation(accuracy, spread);
+        if (sendBox.size() > configSender.minapprox) {
+          messages = sendBox.approximation(configSender.accuracy, configSender.spread);
         } else {
           messages = sendBox.popMessages();
         }
@@ -215,6 +262,40 @@ int zbot::workerSender() {
       continue;
     }
   }
-  // return zbot::ChildSignal::CHILD_RESTART;
+  zbot::log << "zbotd: stopped sender worker";
   return zbot::ChildSignal::CHILD_TERMINATE;
+}
+
+void zbot::signal_error(int sig, siginfo_t* si, void* ptr) {
+  void* ErrorAddr;
+  void* Trace[16];
+  int x;
+  int TraceSize;
+  char** Messages;
+
+  std::string signaltext = strsignal(sig);
+  zbot::log << "zbotd: Signal: " + signaltext;
+
+#if __WORDSIZE == 64
+  ErrorAddr = (void*)((ucontext_t*)ptr)->uc_mcontext.gregs[REG_RIP];
+#else
+  ErrorAddr = (void*)((ucontext_t*)ptr)->uc_mcontext.gregs[REG_EIP];
+#endif
+
+  TraceSize = backtrace(Trace, 16);
+  Trace[1]  = ErrorAddr;
+
+  Messages = backtrace_symbols(Trace, TraceSize);
+  if (Messages) {
+    zbot::log << "== Backtrace ==";
+
+    for (x = 1; x < TraceSize; x++) {
+      zbot::log << Messages[x];
+    }
+    zbot::log << "== End Backtrace ==";
+    free(Messages);
+  }
+
+  zbot::log << "zbotd: stopped sender worker";
+  exit(zbot::ChildSignal::CHILD_RESTART);
 }
