@@ -31,7 +31,10 @@ void zbot::init() {
 void zbot::setPidFile(std::string& f) {
   std::ofstream pidFile;
   pidFile.open(f);
-  if (!pidFile.is_open()) exit(EXIT_FAILURE);
+  if (!pidFile.is_open()) {
+    zbot::log.write(ZLogger::LogLevel::ERROR, "[MONITOR] unable to create a pidfile " + f);
+    exit(EXIT_FAILURE);
+  }
   pidFile << getpid();
   pidFile.close();
 }
@@ -102,6 +105,8 @@ int zbot::zmonitor() {
   std::string pidFile;
   zbot::mainConfig.getParam("pid_file", pidFile);
 
+  zbot::setPidFile(pidFile);
+
   sigset_t sigset;
   siginfo_t siginfo;
   sigemptyset(&sigset);
@@ -127,6 +132,7 @@ int zbot::zmonitor() {
   }
   status = childStatus1 + childStatus2;
   zbot::log << "[MONITOR] Stop. exit:" + std::to_string(status);
+  unlink(pidFile.c_str());
   return status;
 }
 

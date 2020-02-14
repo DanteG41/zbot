@@ -2,7 +2,7 @@
 
 std::map<std::string, std::string> defaultconfig::params         = {{"storage", "/var/spool/zbot"},
                                              {"log_file", "/var/log/zbot.log"},
-                                             {"pid_file", "/var/run/zbot.pid"},
+                                             {"pid_file", "/var/run/zbot/zbotd.pid"},
                                              {"wait", "10"},
                                              {"accuracy", "0.4"},
                                              {"spread", "0.1"},

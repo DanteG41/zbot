@@ -3,7 +3,7 @@
 # Distributed under the terms of the GNU General Public License v2
 
 description="zbotd - the zabbix bot daemon"
-pidfile="/var/run/zbotd.pid"
+pidfile="/var/run/zbot/zbotd.pid"
 command="/usr/bin/zbotd"
 command_args="${CONFIG_FILE}"
 command_user="zbot:zbot"
@@ -14,6 +14,8 @@ depend() {
 }
 
 start_pre() {
+	checkpath -d -o ${command_user} -m750 /var/run/zbot
+
         if [ ! -f ${CONFIG_FILE} ] ; then
                 eerror "Please create ${CONFIG_FILE}"
                 return 1
