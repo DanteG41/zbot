@@ -10,15 +10,22 @@ HOMEPAGE="https://github.com/DanteG41/zbot"
 EGIT_REPO_URI="https://github.com/DanteG41/zbot.git"
 EGIT_COMMIT="v${PV}"
 EGIT_SUBMODULES=( libs/simpleini libs/tgbot )
+CMAKE_MIN_VERSION=3.3.1-r1
 LICENSE="GPL-3.0"
 SLOT="0"
 KEYWORDS="~amd64 ~x86"
 
-DEPEND=""
+RDEPEND="
+	dev-libs/openssl
+	dev-libs/boost
+	sys-libs/zlib
+"
+
+DEPEND="${RDEPEND}"
 
 pkg_setup() {
 	enewgroup	zbot 80
-	enewuser	zbot 80 /bin/bash /var/empty zbot
+	enewuser	zbot 80 -1 -1 zbot
 
 }
 
@@ -33,12 +40,18 @@ src_install() {
 }
 
 pkg_postinst() {
+		ewarn
+		ewarn "To be able to send messages via zbotcli"
+		ewarn "from a user other than zbot, add"
+		ewarn "your user to the zbot group:"
+		ewarn "useradd -a -G zbot your_user"
+		ewarn
 	if [[ ! -d /var/spool/zbot ]]; then
 			ewarn
 			ewarn "You must create /var/spool/zbot directory"
 			ewarn "that is writable for the zbot user, or "
 			ewarn "specify a different directory in zbot.ini"
-			ewarn "permissions should be u=rwx (2770)"
+			ewarn "permissions should be u=rwx g=rws (2770)"
 			ewarn
 	fi
 }
