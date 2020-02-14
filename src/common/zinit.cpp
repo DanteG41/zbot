@@ -195,7 +195,7 @@ int zbot::workerSender() {
           messages = sendBox.popMessages();
         }
         for (std::string msg : messages) {
-          tbot.send(atoi(chat.c_str()), msg);
+          tbot.send(atoll(chat.c_str()), msg);
         }
         sendBox.erase();
       }

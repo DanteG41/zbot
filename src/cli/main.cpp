@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
       telegramConfig.load("telegram", defaultconfig::telegramParams);
       telegramConfig.getParam("token", telegramToken);
       Ztbot bot(telegramToken);
-      bot.send(atoi(chat), msg);
+      bot.send(atoll(chat), msg);
     } else {
       ZStorage zbotStorage(path);
       ZStorage pendingStorage(path + "/pending");

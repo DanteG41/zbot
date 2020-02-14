@@ -1,5 +1,5 @@
 #include <ztbot.h>
 
-void Ztbot::send(int c, std::string m) {
+void Ztbot::send(int64_t c, std::string m) {
   bot.getApi().sendMessage(-c, m);
 }

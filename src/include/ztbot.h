@@ -8,5 +8,5 @@ private:
 public:
   Ztbot(const char* t) : bot(t){};
   Ztbot(std::string t) : bot(t.c_str()){};
-  void send(int c, std::string m);
+  void send(int64_t c, std::string m);
 };
