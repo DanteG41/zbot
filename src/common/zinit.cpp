@@ -91,7 +91,8 @@ int zbot::zwait(int& pid, int& start, siginfo_t& siginfo) {
 int zbot::zmonitor() {
   int botPid, senderPid;
   int botStatus, senderStatus, status;
-  int childStatus1, childStatus2;
+  int childStatus1    = 0;
+  int childStatus2    = 0;
   int senderNeedStart = 1;
   int botNeedStart    = 1;
   std::string pidFile;
