@@ -3,6 +3,7 @@
 
 #include <defaultconfig.h>
 #include <iostream>
+#include <set>
 #include <signal.h>
 #include <unistd.h>
 #include <zconfig.h>
@@ -16,7 +17,8 @@ extern char** progName;
 extern int argc;
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
 struct config {
-  std::string path, token;
+  std::set<std::string> adminUsers;
+  std::string path, token, zabbixServer;
   int maxmessages, minapprox, wait;
   float accuracy, spread;
 };
@@ -30,7 +32,8 @@ int zwait(int& pid, int& start, siginfo_t& siginfo);
 int startWorker(int& pid, int& status, int& start, int (*func)());
 void setPidFile(std::string& f);
 void setProcName(const char* procname);
-void senderGetParams(ZConfig& zc, config& c);
+void botGetParams(ZConfig& tc, ZConfig& zc, config& c);
+void senderGetParams(ZConfig& tc, config& c);
 void signal_error(int sig, siginfo_t* si, void* ptr);
 } // namespace zbot
 #endif // ZINIT_H

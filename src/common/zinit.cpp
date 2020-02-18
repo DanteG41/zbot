@@ -1,3 +1,4 @@
+#include <boost/algorithm/string.hpp>
 #include <chrono>
 #include <cstring>
 #include <execinfo.h>
@@ -170,14 +171,81 @@ int zbot::zfork() {
 
 int zbot::workerBot() {
   zbot::setProcName("zbotd: bot");
-  zbot::log << "start zbotd: telegram bot worker";
-  sleep(5);
-  // return zbot::ChildSignal::CHILD_RESTART;
+  zbot::log << "zbotd: start telegram bot worker";
+
+  ZConfig telegramConfig, zabbixConfig;
+  config configBot;
+
+  telegramConfig.configFile = mainConfig.configFile;
+  zabbixConfig.configFile   = mainConfig.configFile;
+  telegramConfig.load("telegram", defaultconfig::telegramParams);
+  zabbixConfig.load("zabbix", defaultconfig::zabbixParams);
+  zbot::botGetParams(telegramConfig, zabbixConfig, configBot);
+
+  struct sigaction sigact;
+  siginfo_t siginfo;
+  sigset_t sigset;
+
+  sigact.sa_flags     = SA_SIGINFO;
+  sigact.sa_sigaction = zbot::signal_error;
+
+  sigemptyset(&sigact.sa_mask);
+
+  sigaction(SIGFPE, &sigact, 0);
+  sigaction(SIGILL, &sigact, 0);
+  sigaction(SIGSEGV, &sigact, 0);
+  sigaction(SIGBUS, &sigact, 0);
+
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGQUIT);
+  sigaddset(&sigset, SIGINT);
+  sigaddset(&sigset, SIGTERM);
+  sigaddset(&sigset, SIGUSR1);
+  sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+  while (true) {
+    struct timespec timeout;
+    timeout.tv_sec  = configBot.wait;
+    timeout.tv_nsec = 0;
+
+    if (sigtimedwait(&sigset, &siginfo, &timeout) > 0) {
+      if (siginfo.si_signo == SIGUSR1) {
+        telegramConfig.load("telegram", defaultconfig::telegramParams);
+        zabbixConfig.load("zabbix", defaultconfig::zabbixParams);
+        mainConfig.load(defaultconfig::params);
+        zbot::botGetParams(telegramConfig, zabbixConfig, configBot);
+        zbot::log << "zbotd: bot reload config";
+      } else if (siginfo.si_signo == SIGTERM) {
+        exit(zbot::ChildSignal::CHILD_TERMINATE);
+      }
+    }
+    try {
+      sleep(2);
+    } catch (TgBot::TgException& e) {
+      std::string err = "TgBot exception: ";
+      err += e.what();
+      zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      continue;
+    }
+  }
+  zbot::log << "zbotd: stopped bot worker";
   return zbot::ChildSignal::CHILD_TERMINATE;
 }
 
-void zbot::senderGetParams(ZConfig& zc, zbot::config& c) {
-  zc.getParam("token", c.token);
+void zbot::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
+  std::string adminUsers;
+
+  tc.getParam("token", c.token);
+  zc.getParam("zabbix_server", c.zabbixServer);
+  mainConfig.getParam("wait", c.wait);
+
+  // parse and place the list of users in the set container
+  tc.getParam("admin_users", adminUsers);
+  boost::split(c.adminUsers, adminUsers, boost::is_any_of(";, "));
+}
+
+void zbot::senderGetParams(ZConfig& tc, zbot::config& c) {
+  tc.getParam("token", c.token);
   mainConfig.getParam("storage", c.path);
   mainConfig.getParam("max_messages", c.maxmessages);
   mainConfig.getParam("min_approx", c.minapprox);
@@ -232,7 +300,7 @@ int zbot::workerSender() {
         telegramConfig.load("telegram", defaultconfig::telegramParams);
         mainConfig.load(defaultconfig::params);
         zbot::senderGetParams(telegramConfig, configSender);
-        zbot::log << "zbotd sender: reload config";
+        zbot::log << "zbotd: sender reload config";
       } else if (siginfo.si_signo == SIGTERM) {
         exit(zbot::ChildSignal::CHILD_TERMINATE);
       }
