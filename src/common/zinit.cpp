@@ -242,23 +242,31 @@ int zbot::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
 void zbot::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
   std::string adminUsers;
 
-  tc.getParam("token", c.token);
-  zc.getParam("zabbix_server", c.zabbixServer);
-  mainConfig.getParam("wait", c.wait);
+  try {
+    tc.getParam("token", c.token);
+    tc.getParam("admin_users", adminUsers);
+    zc.getParam("zabbix_server", c.zabbixServer);
+    mainConfig.getParam("wait", c.wait);
+  } catch (ZConfigException& e) {
+    zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());
+  }
 
   // parse and place the list of users in the set container
-  tc.getParam("admin_users", adminUsers);
   boost::split(c.adminUsers, adminUsers, boost::is_any_of(";, "));
 }
 
 void zbot::senderGetParams(ZConfig& tc, zbot::config& c) {
-  tc.getParam("token", c.token);
-  mainConfig.getParam("storage", c.path);
-  mainConfig.getParam("max_messages", c.maxmessages);
-  mainConfig.getParam("min_approx", c.minapprox);
-  mainConfig.getParam("accuracy", c.accuracy);
-  mainConfig.getParam("spread", c.spread);
-  mainConfig.getParam("wait", c.wait);
+  try {
+    tc.getParam("token", c.token);
+    mainConfig.getParam("storage", c.path);
+    mainConfig.getParam("max_messages", c.maxmessages);
+    mainConfig.getParam("min_approx", c.minapprox);
+    mainConfig.getParam("accuracy", c.accuracy);
+    mainConfig.getParam("spread", c.spread);
+    mainConfig.getParam("wait", c.wait);
+  } catch (ZConfigException& e) {
+    zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());
+  }
 }
 
 int zbot::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
