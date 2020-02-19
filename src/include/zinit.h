@@ -26,10 +26,11 @@ struct config {
 void init();
 int zfork();
 int zmonitor();
-int workerBot();
-int workerSender();
+int workerBot(sigset_t& sigset, siginfo_t& siginfo);
+int workerSender(sigset_t& sigset, siginfo_t& siginfo);
 int zwait(int& pid, int& start, siginfo_t& siginfo);
-int startWorker(int& pid, int& status, int& start, int (*func)());
+int startWorker(int& pid, int& status, int& start,
+                int (*func)(sigset_t& sigset, siginfo_t& siginfo));
 void setPidFile(std::string& f);
 void setProcName(const char* procname);
 void botGetParams(ZConfig& tc, ZConfig& zc, config& c);
