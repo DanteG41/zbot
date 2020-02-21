@@ -31,3 +31,9 @@ void ZConfig::getParam(const char* name, std::string& val) {
       ? throw ZConfigException("Param " + std::string(name) + " not found in default config")
       : val = i->second;
 }
+void ZConfig::getParam(const char* name, bool& val) {
+  std::map<std::string, std::string>::iterator i = params_.find(name);
+  i == params_.end()
+      ? throw ZConfigException("Param " + std::string(name) + " not found in default config")
+      : val = std::stoi(i->second);
+}
