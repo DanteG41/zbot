@@ -9,6 +9,7 @@
 #include <zconfig.h>
 #include <zlogger.h>
 #include <zmsgbox.h>
+#include <ztbot.h>
 
 namespace zbot {
 extern ZLogger log;
@@ -16,11 +17,13 @@ extern ZConfig mainConfig;
 extern char** progName;
 extern int argc;
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
+enum Menu { MAIN, INFO, MAINTENANCE, ACTION };
 struct config {
   std::set<std::string> adminUsers;
-  std::string path, token, zabbixServer;
-  int maxmessages, minapprox, wait;
+  std::string path, token, zabbixServer, webhookPublicHost, webhookPath;
+  int maxmessages, minapprox, wait, webhookBindPort;
   float accuracy, spread;
+  bool webhook;
 };
 
 void init();
@@ -34,6 +37,7 @@ int startWorker(int& pid, int& status, int& start,
 void setPidFile(std::string& f);
 void setProcName(const char* procname);
 void botGetParams(ZConfig& tc, ZConfig& zc, config& c);
+TgBot::InlineKeyboardMarkup::Ptr createMenu(Menu menu);
 void senderGetParams(ZConfig& tc, config& c);
 void signal_error(int sig, siginfo_t* si, void* ptr);
 } // namespace zbot
