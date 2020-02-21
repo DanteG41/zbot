@@ -218,34 +218,34 @@ int zbot::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
 
   bot.getEvents().onCallbackQuery(
       [&bot, &mainMenu, &infoMenu, &configBot](TgBot::CallbackQuery::Ptr callback) {
-        zbot::log << "Callback";
-        if (callback->data == "info") {
-          bot.getApi().editMessageText("# Info:", callback->message->chat->id,
-                                       callback->message->messageId, callback->inlineMessageId,
-                                       "Markdown", false, infoMenu);
-        } else if (callback->data == "getchatid") {
-          std::string response;
-          response = "Chatid: " + std::to_string(callback->message->chat->id);
-          bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-          bot.getApi().sendMessage(callback->message->chat->id, response);
-        } else if (callback->data == "userlist") {
-          std::string users, response;
-          for (std::string s : configBot.adminUsers) {
-            users += s + "\n";
+        if (configBot.adminUsers.count(callback->from->username)) {
+          if (callback->data == "info") {
+            bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
+                                         callback->message->messageId, callback->inlineMessageId,
+                                         "Markdown", false, infoMenu);
+          } else if (callback->data == "getchatid") {
+            std::string response;
+            response = "Chatid: " + std::to_string(callback->message->chat->id);
+            bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+            bot.getApi().sendMessage(callback->message->chat->id, response);
+          } else if (callback->data == "userlist") {
+            std::string users, response;
+            for (std::string s : configBot.adminUsers) {
+              users += s + "\n";
+            }
+            response = "Users: \n" + users;
+            bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+            bot.getApi().sendMessage(callback->message->chat->id, response);
           }
-          response = "Users: \n" + users;
-          bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-          bot.getApi().sendMessage(callback->message->chat->id, response);
         }
       });
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
-    if (configBot.adminUsers.count(message->chat->username)) {
-      bot.getApi().sendMessage(message->chat->id, "# Selecting an action:", false, 0, mainMenu,
+    if (configBot.adminUsers.count(message->from->username)) {
+      bot.getApi().sendMessage(message->chat->id, "*Selecting an action:*", false, 0, mainMenu,
                                "MarkDown");
     } else {
       bot.getApi().sendMessage(message->chat->id, "Access denied");
     }
-    bot.getApi().deleteMessage(message->chat->id, message->messageId);
   });
 
   TgBot::TgLongPoll longPoll(bot, 100, 10);
