@@ -35,3 +35,6 @@
 .vscode
 *.trash
 .local
+
+# cmake
+build
