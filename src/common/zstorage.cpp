@@ -1,6 +1,5 @@
 #include <dirent.h>
 #include <iostream>
-#include <unistd.h>
 #include <zstorage.h>
 
 int ZStorage::updateStat() { return stat(path_.c_str(), &stat_buf_); }

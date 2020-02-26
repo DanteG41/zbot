@@ -3,6 +3,7 @@ project(zbot)
 set(SOURCES hirschberg.cpp
 	zconfig.cpp
 	zinit.cpp
+	zworker.cpp
 	zlogger.cpp
 	zmsgbox.cpp
 	zstorage.cpp
