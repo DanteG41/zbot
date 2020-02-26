@@ -121,8 +121,10 @@ int zbot::zmonitor() {
   int childStatus2    = 0;
   int senderNeedStart = 1;
   int botNeedStart    = 1;
+  bool botEnable;
   std::string pidFile;
   zbot::mainConfig.getParam("pid_file", pidFile);
+  zbot::mainConfig.getParam("bot_enable", botEnable);
 
   zbot::setPidFile(pidFile);
 
@@ -136,8 +138,10 @@ int zbot::zmonitor() {
   sigaddset(&sigset, SIGUSR1);
   sigprocmask(SIG_BLOCK, &sigset, NULL);
 
+  if (!botEnable) childStatus1 = zbot::ChildSignal::CHILD_TERMINATE;
+
   while (true) {
-    zbot::startWorker(botPid, botStatus, botNeedStart, zbot::workerBot);
+    if (botEnable) zbot::startWorker(botPid, botStatus, botNeedStart, zbot::workerBot);
     zbot::startWorker(senderPid, senderStatus, senderNeedStart, zbot::workerSender);
     sigwaitinfo(&sigset, &siginfo);
     if (siginfo.si_pid == botPid)

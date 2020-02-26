@@ -7,7 +7,8 @@ std::map<std::string, std::string> defaultconfig::params       = {{"storage", "/
                                                             {"accuracy", "0.4"},
                                                             {"spread", "0.1"},
                                                             {"max_messages", "50"},
-                                                            {"min_approx", "5"}};
+                                                            {"min_approx", "5"},
+                                                            {"bot_enable", "1"}};
 std::map<std::string, std::string> defaultconfig::zabbixParams = {
     {"zabbix_server", "http://127.0.0.1"}};
 std::map<std::string, std::string> defaultconfig::telegramParams = {
