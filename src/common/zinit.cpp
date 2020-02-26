@@ -264,7 +264,7 @@ int zbot::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     }
     if (webhookPid == 0) {
       zbot::log << "zbotd: start webhookServer";
-      zbot::setProcName("zbotd: webhookServer");
+      zbot::setProcName("zbotd: webhook");
       webhookServer.start();
     }
   }
