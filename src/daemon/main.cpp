@@ -7,7 +7,7 @@ void printHelp(const char* appname) {
 }
 
 int main(int argc, char* argv[]) {
-  bool configErr;
+  bool configErr = false;
   zbot::progName = argv;
   zbot::argc     = argc;
   std::string logPath;
