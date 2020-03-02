@@ -23,4 +23,14 @@ public:
   bool auth();
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getHostGrp(int limit = 100);
+  void createMaintenance(std::string id, std::string name);
+};
+
+class ZZabbixException {
+private:
+  std::string m_error;
+
+public:
+  ZZabbixException(std::string error) : m_error(error) {}
+  const char* getError() { return m_error.c_str(); }
 };

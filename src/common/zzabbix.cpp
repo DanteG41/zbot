@@ -186,3 +186,30 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) 
   }
   return result;
 }
+
+void ZZabbix::createMaintenance(std::string id, std::string name) {
+  ptree request, response;
+  ptree groupids, timeperiods;
+  ptree groupidChild, timeperiodChild;
+  std::time_t time = std::time(nullptr);
+
+  groupidChild.put_value(id);
+  groupids.push_back(std::make_pair("", groupidChild));
+
+  timeperiodChild.put("timeperiod_type", 0);
+  timeperiodChild.put("period", 3600);
+  timeperiods.push_back(std::make_pair("", timeperiodChild));
+
+  request.put("method", "maintenance.create");
+  request.put("params.name", name);
+  request.put("params.active_since", time);
+  request.put("params.active_till", time + 86400);
+  request.add_child("params.groupids", groupids);
+  request.add_child("params.timeperiods", timeperiods);
+
+  response        = ZZabbix::parseJson(sendRequest(request));
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+}
