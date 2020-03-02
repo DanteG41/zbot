@@ -1,5 +1,6 @@
 #include <signal.h>
 #include <zinit.h>
+#include <zzabbix.h>
 
 namespace zworker {
 int workerBot(sigset_t& sigset, siginfo_t& siginfo);

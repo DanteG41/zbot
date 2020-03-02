@@ -18,7 +18,8 @@ enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
 enum Menu { MAIN, INFO, MAINTENANCE, ACTION };
 struct config {
   std::set<std::string> adminUsers;
-  std::string path, token, zabbixServer, webhookPublicHost, webhookPath;
+  std::string path, token, webhookPublicHost, webhookPath;
+  std::string zabbixApi, zabbixUser, zabbixPassword;
   int maxmessages, minapprox, wait, webhookBindPort;
   float accuracy, spread;
   bool webhook;

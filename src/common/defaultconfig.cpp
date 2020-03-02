@@ -10,7 +10,9 @@ std::map<std::string, std::string> defaultconfig::params       = {{"storage", "/
                                                             {"min_approx", "5"},
                                                             {"bot_enable", "1"}};
 std::map<std::string, std::string> defaultconfig::zabbixParams = {
-    {"zabbix_server", "http://127.0.0.1"}};
+    {"zabbix_api", "http://company.com/zabbix/api_jsonrpc.php"},
+    {"user", "zbot"},
+    {"password", "zbotpassword"}};
 std::map<std::string, std::string> defaultconfig::telegramParams = {
     {"token", "*token*"},
     {"admin_users", ""},

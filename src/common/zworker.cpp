@@ -128,7 +128,9 @@ void zworker::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
     tc.getParam("webhook_path", c.webhookPath);
     tc.getParam("webhook_public_host", c.webhookPublicHost);
     tc.getParam("webhook_bind_port", c.webhookBindPort);
-    zc.getParam("zabbix_server", c.zabbixServer);
+    zc.getParam("zabbix_api", c.zabbixApi);
+    zc.getParam("user", c.zabbixUser);
+    zc.getParam("password", c.zabbixPassword);
     zbot::mainConfig.getParam("wait", c.wait);
   } catch (ZConfigException& e) {
     zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());

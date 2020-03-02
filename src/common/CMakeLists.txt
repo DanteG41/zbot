@@ -8,6 +8,7 @@ set(SOURCES hirschberg.cpp
 	zmsgbox.cpp
 	zstorage.cpp
 	ztbot.cpp
+	zzabbix.cpp
 	defaultconfig.cpp)
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
