@@ -1,5 +1,10 @@
 #include <boost/algorithm/string.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 #include <zworker.h>
+
+using boost::property_tree::ptree;
+using boost::property_tree::write_json;
 
 int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   zbot::setProcName("zbotd: bot");
@@ -9,43 +14,95 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   zbot::config configBot;
   int webhookPid = 0;
 
+  struct zEvent {
+    int64_t chat;
+    std::string from;
+    std::vector<std::string> callback;
+  };
+  std::vector<zEvent> waitEvent;
+
   telegramConfig.configFile = zbot::mainConfig.configFile;
   zabbixConfig.configFile   = zbot::mainConfig.configFile;
   telegramConfig.load("telegram", defaultconfig::telegramParams);
   zabbixConfig.load("zabbix", defaultconfig::zabbixParams);
   zworker::botGetParams(telegramConfig, zabbixConfig, configBot);
 
-  TgBot::InlineKeyboardMarkup::Ptr mainMenu = zworker::createMenu(zbot::Menu::MAIN);
-  TgBot::InlineKeyboardMarkup::Ptr infoMenu = zworker::createMenu(zbot::Menu::INFO);
+  ZZabbix zabbix(configBot.zabbixApi.c_str(), configBot.zabbixUser.c_str(),
+                 configBot.zabbixPassword.c_str());
+  zabbix.auth();
+
+  TgBot::InlineKeyboardMarkup::Ptr mainMenu = zworker::createMenu(zworker::Menu::MAIN, zabbix);
+  TgBot::InlineKeyboardMarkup::Ptr infoMenu = zworker::createMenu(zworker::Menu::INFO, zabbix);
 
   TgBot::Bot bot(configBot.token);
   std::string webhookUrl = "https://";
   webhookUrl += configBot.webhookPublicHost;
   webhookUrl += configBot.webhookPath;
 
-  bot.getEvents().onCallbackQuery(
-      [&bot, &mainMenu, &infoMenu, &configBot](TgBot::CallbackQuery::Ptr callback) {
-        if (configBot.adminUsers.count(callback->from->username)) {
-          if (callback->data == "info") {
-            bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
-                                         callback->message->messageId, callback->inlineMessageId,
-                                         "Markdown", false, infoMenu);
-          } else if (callback->data == "getchatid") {
-            std::string response;
-            response = "Chatid: " + std::to_string(callback->message->chat->id);
-            bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-            bot.getApi().sendMessage(callback->message->chat->id, response);
-          } else if (callback->data == "userlist") {
-            std::string users, response;
-            for (std::string s : configBot.adminUsers) {
-              users += s + "\n";
-            }
-            response = "Users: \n" + users;
-            bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-            bot.getApi().sendMessage(callback->message->chat->id, response);
-          }
+  bot.getEvents().onCallbackQuery([&bot, &mainMenu, &infoMenu, &configBot, &zabbix,
+                                   &waitEvent](TgBot::CallbackQuery::Ptr callback) {
+    if (configBot.adminUsers.count(callback->from->username)) {
+      if (callback->data == "info") {
+        bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, infoMenu);
+      } else if (callback->data == "maintenance") {
+        TgBot::InlineKeyboardMarkup::Ptr maintenanceMenu =
+            zworker::createMenu(zworker::Menu::MAINTENANCE, zabbix);
+        bot.getApi().editMessageText("*Maintenance:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, maintenanceMenu);
+      } else if (callback->data == "getchatid") {
+        std::string response;
+        response = "Chatid: " + std::to_string(callback->message->chat->id);
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, response);
+      } else if (callback->data == "userlist") {
+        std::string users, response;
+        for (std::string s : configBot.adminUsers) {
+          users += s + "\n";
         }
-      });
+        response = "Users: \n" + users;
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, response);
+      } else if (callback->data == "createmaintenance") {
+        TgBot::InlineKeyboardMarkup::Ptr maintenanceMenuSelectHostGrp =
+            zworker::createMenu(zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix);
+        bot.getApi().editMessageText("*Maintenance/Select Host group:*",
+                                     callback->message->chat->id, callback->message->messageId,
+                                     callback->inlineMessageId, "Markdown", false,
+                                     maintenanceMenuSelectHostGrp);
+      } else if (callback->data.compare(0, 34, "maintenance.create.select.grp.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr maintenanceMenuSelectHostGrp = zworker::createMenu(
+            zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Maintenance/Select Host group:*",
+                                     callback->message->chat->id, callback->message->messageId,
+                                     callback->inlineMessageId, "Markdown", false,
+                                     maintenanceMenuSelectHostGrp);
+      } else if (callback->data.compare(0, 30, "maintenance.create.select.grp ") == 0) {
+        zEvent event;
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        event.chat     = callback->message->chat->id;
+        event.from     = callback->from->username;
+        event.callback = callbackData;
+        waitEvent.push_back(event);
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
+
+      } else if (callback->data.compare(0, 23, "maintenance.select.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr maintenanceMenu =
+            zworker::createMenu(zworker::Menu::MAINTENANCE, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Maintenance:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, maintenanceMenu);
+      }
+    }
+  });
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
     if (configBot.adminUsers.count(message->from->username)) {
       bot.getApi().sendMessage(message->chat->id, "*Selecting an action:*", false, 0, mainMenu,
@@ -54,6 +111,24 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       bot.getApi().sendMessage(message->chat->id, "Access denied");
     }
   });
+  bot.getEvents().onNonCommandMessage(
+      [&bot, &configBot, &zabbix, &waitEvent](TgBot::Message::Ptr message) {
+        for (std::vector<zEvent>::iterator it = waitEvent.begin(); it != waitEvent.end(); it++) {
+          if (message->from->username == it->from && message->chat->id == it->chat) {
+            if (it->callback[0] == "maintenance.create.select.grp") {
+              std::string response = "✅ Maintenance period successful created.";
+              try {
+                zabbix.createMaintenance(it->callback[1], message->text);
+              } catch (ZZabbixException& e) {
+                response = "⚠️ ERROR: " + std::string(e.getError());
+              }
+              bot.getApi().sendMessage(message->chat->id, response);
+              it = waitEvent.erase(it);
+              if (it == waitEvent.end()) break;
+            }
+          }
+        }
+      });
 
   TgBot::TgLongPoll longPoll(bot, 100, 10);
 
@@ -68,7 +143,13 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     if (webhookPid == 0) {
       zbot::log << "zbotd: start webhookServer";
       zbot::setProcName("zbotd: webhook");
-      webhookServer.start();
+      try {
+        webhookServer.start();
+      } catch (TgBot::TgException& e) {
+        std::string err = "TgBot exception: ";
+        err += e.what();
+        zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      }
     }
   }
 
@@ -284,10 +365,29 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     infoMenu->inlineKeyboard.push_back(inforow);
     return infoMenu;
   }
-  case zbot::Menu::ACTION:
+  case zworker::Menu::ACTION:
     break;
-  case zbot::Menu::MAINTENANCE:
-    break;
+  case zworker::Menu::MAINTENANCE: {
+    auto maintenanceMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto create(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow;
+
+    create->text         = "Create new maintenance period";
+    create->callbackData = "createmaintenance";
+
+    zworker::addList(maintenanceMenu, "maintenance.select", &zabbix, &ZZabbix::getMaintenances,
+                     page);
+
+    maintenancerow.push_back(create);
+    maintenanceMenu->inlineKeyboard.push_back(maintenancerow);
+    return maintenanceMenu;
+  }
+  case zworker::Menu::MAINTENANCESELECTHOSTGRP: {
+    auto maintenanceMenuSelectHostGrp(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    zworker::addList(maintenanceMenuSelectHostGrp, "maintenance.create.select.grp", &zabbix,
+                     &ZZabbix::getHostGrp, page);
+    return maintenanceMenuSelectHostGrp;
+  }
   default:
     break;
   }
