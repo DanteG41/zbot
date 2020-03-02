@@ -140,9 +140,109 @@ void zworker::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
   boost::split(c.adminUsers, adminUsers, boost::is_any_of(";, "));
 }
 
-TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zbot::Menu menu) {
+void zworker::addButton(std::vector<TgBot::InlineKeyboardButton::Ptr>& row, std::string text,
+                        std::string callbackData) {
+  auto button(std::make_shared<TgBot::InlineKeyboardButton>());
+  button->text         = text;
+  button->callbackData = callbackData;
+  row.push_back(button);
+}
+
+std::vector<TgBot::InlineKeyboardButton::Ptr> zworker::createPaginator(int curr, int max,
+                                                                       std::string callbackData) {
+  std::vector<TgBot::InlineKeyboardButton::Ptr> result;
+  std::string samedata;
+  samedata += " " + std::to_string(curr);
+  samedata += " " + std::to_string(std::time(nullptr));
+  if (max > 5) {
+    if (curr >= 3 && curr < max - 3) {
+      addButton(result, "<<1", callbackData + " 0");
+      addButton(result, std::to_string(curr), callbackData + " " + std::to_string(curr - 1));
+      addButton(result, "-" + std::to_string(curr + 1) + "-", callbackData + samedata);
+      addButton(result, std::to_string(curr + 2), callbackData + " " + std::to_string(curr + 1));
+      addButton(result, std::to_string(max) + ">>", callbackData + " " + std::to_string(max - 1));
+      return result;
+    } else if (curr < 3) {
+      for (int c = 0; c < 3; ++c) {
+        std::string page = std::to_string(c + 1);
+        if (curr == c) {
+          addButton(result, "-" + page + "-", callbackData + samedata);
+        } else {
+          addButton(result, page, callbackData + " " + std::to_string(c));
+        }
+      }
+      addButton(result, "4", callbackData + " 3");
+      addButton(result, std::to_string(max) + ">>", callbackData + " " + std::to_string(max - 1));
+      return result;
+    } else {
+      addButton(result, "<<1", callbackData + " 0");
+      addButton(result, std::to_string(max - 3), callbackData + " " + std::to_string(max - 4));
+      for (int c = max - 3; c < max; ++c) {
+        std::string page = std::to_string(c + 1);
+        if (curr == c) {
+          addButton(result, "-" + page + "-", callbackData + samedata);
+        } else {
+          addButton(result, page, callbackData + " " + std::to_string(c));
+        }
+      }
+      return result;
+    }
+  } else {
+    for (int c = 0; c < max; ++c) {
+      std::string page = std::to_string(c + 1);
+      if (curr == c) {
+        addButton(result, "-" + page + "-", callbackData + samedata);
+      } else {
+        addButton(result, page, callbackData + " " + std::to_string(c));
+      }
+    }
+  }
+  return result;
+}
+
+void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callbackName,
+                      ZZabbix* zabbix,
+                      std::vector<std::pair<std::string, std::string>> (ZZabbix::*fp)(int),
+                      int page, int lineperpage) {
+  std::vector<std::pair<std::string, std::string>> data;
+  data = (zabbix->*fp)(100);
+
+  if (data.size() > lineperpage) {
+    for (int c = 0; c < lineperpage; ++c) {
+      auto button(std::make_shared<TgBot::InlineKeyboardButton>());
+      std::vector<TgBot::InlineKeyboardButton::Ptr> row;
+      int ind = page * lineperpage + c;
+      if (ind < data.size()) {
+        button->text         = data[ind].second;
+        button->callbackData = callbackName + " " + data[ind].first;
+      } else {
+        button->text         = "-";
+        button->callbackData = "button.empty";
+      }
+      row.push_back(button);
+      markup->inlineKeyboard.push_back(row);
+    }
+    markup->inlineKeyboard.push_back(
+        createPaginator(page, std::ceil(data.size() / float(lineperpage)), callbackName + ".page"));
+  } else {
+    for (std::pair<std::string, std::string> d : data) {
+      auto button(std::make_shared<TgBot::InlineKeyboardButton>());
+      std::vector<TgBot::InlineKeyboardButton::Ptr> maintRow;
+
+      button->text         = d.second;
+      button->callbackData = callbackName + " " + d.first;
+
+      maintRow.push_back(button);
+      markup->inlineKeyboard.push_back(maintRow);
+    }
+  }
+}
+
+TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix& zabbix,
+                                                     int page) {
+
   switch (menu) {
-  case zbot::Menu::MAIN: {
+  case zworker::Menu::MAIN: {
     auto mainMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto info(std::make_shared<TgBot::InlineKeyboardButton>());
     auto maintenance(std::make_shared<TgBot::InlineKeyboardButton>());
@@ -168,7 +268,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zbot::Menu menu) {
     mainMenu->inlineKeyboard.push_back(mainrow2);
     return mainMenu;
   }
-  case zbot::Menu::INFO: {
+  case zworker::Menu::INFO: {
     auto infoMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto getchatid(std::make_shared<TgBot::InlineKeyboardButton>());
     auto userlist(std::make_shared<TgBot::InlineKeyboardButton>());

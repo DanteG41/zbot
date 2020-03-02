@@ -15,7 +15,6 @@ extern ZConfig mainConfig;
 extern char** progName;
 extern int argc;
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
-enum Menu { MAIN, INFO, MAINTENANCE, ACTION };
 struct config {
   std::set<std::string> adminUsers;
   std::string path, token, webhookPublicHost, webhookPath;
