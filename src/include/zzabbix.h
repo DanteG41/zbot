@@ -23,6 +23,7 @@ public:
   bool auth();
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getHostGrp(int limit = 100);
+  std::string getMaintenanceName(std::string id);
   void createMaintenance(std::string id, std::string name);
 };
 
