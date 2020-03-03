@@ -3,7 +3,7 @@
 #include <zzabbix.h>
 
 namespace zworker {
-enum Menu { MAIN, INFO, MAINTENANCE, MAINTENANCESELECT, MAINTENANCESELECTHOSTGRP, ACTION };
+enum Menu { MAIN, INFO, MAINTENANCE, MAINTENANCESELECT, MAINTENANCESELECTHOSTGRP, ACTION, SCREEN };
 int workerBot(sigset_t& sigset, siginfo_t& siginfo);
 int workerSender(sigset_t& sigset, siginfo_t& siginfo);
 void botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c);

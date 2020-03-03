@@ -50,6 +50,12 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, infoMenu);
+      } else if (callback->data == "screen") {
+        TgBot::InlineKeyboardMarkup::Ptr screenMenu =
+            zworker::createMenu(zworker::Menu::SCREEN, zabbix);
+        bot.getApi().editMessageText("*Screen:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, screenMenu);
       } else if (callback->data == "maintenance") {
         TgBot::InlineKeyboardMarkup::Ptr maintenanceMenu =
             zworker::createMenu(zworker::Menu::MAINTENANCE, zabbix);
@@ -96,6 +102,14 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
 
+      } else if (callback->data.compare(0, 18, "screen.select.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr screenMenu =
+            zworker::createMenu(zworker::Menu::SCREEN, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Screen:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, screenMenu);
       } else if (callback->data.compare(0, 23, "maintenance.select.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -408,6 +422,19 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
   }
   case zworker::Menu::ACTION:
     break;
+  case zworker::Menu::SCREEN: {
+    auto screenMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> screenrow;
+
+    back->text         = "Back";
+    back->callbackData = "main";
+
+    zworker::addList(screenMenu, "screen.select", &zabbix, &ZZabbix::getScreens, page);
+    screenrow.push_back(back);
+    screenMenu->inlineKeyboard.push_back(screenrow);
+    return screenMenu;
+  }
   case zworker::Menu::MAINTENANCE: {
     auto maintenanceMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto create(std::make_shared<TgBot::InlineKeyboardButton>());
