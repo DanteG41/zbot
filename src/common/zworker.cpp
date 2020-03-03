@@ -27,7 +27,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   zabbixConfig.load("zabbix", defaultconfig::zabbixParams);
   zworker::botGetParams(telegramConfig, zabbixConfig, configBot);
 
-  ZZabbix zabbix(configBot.zabbixApi.c_str(), configBot.zabbixUser.c_str(),
+  ZZabbix zabbix(configBot.zabbixUrl.c_str(), configBot.zabbixUser.c_str(),
                  configBot.zabbixPassword.c_str());
   zabbix.auth();
 
@@ -244,7 +244,7 @@ void zworker::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
     tc.getParam("webhook_path", c.webhookPath);
     tc.getParam("webhook_public_host", c.webhookPublicHost);
     tc.getParam("webhook_bind_port", c.webhookBindPort);
-    zc.getParam("zabbix_api", c.zabbixApi);
+    zc.getParam("zabbix_url", c.zabbixUrl);
     zc.getParam("user", c.zabbixUser);
     zc.getParam("password", c.zabbixPassword);
     zbot::mainConfig.getParam("wait", c.wait);

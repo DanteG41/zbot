@@ -1,6 +1,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <iostream>
+#include <regex>
 #include <set>
 #include <zzabbix.h>
 
@@ -10,18 +11,20 @@ using boost::property_tree::ptree;
 using boost::property_tree::read_json;
 using boost::property_tree::write_json;
 
-std::string ZZabbix::generateRequest(const std::string& payload, bool isKeepAlive) {
+std::string ZZabbix::generateRequest(TgBot::Url& url, const std::string& payload,
+                                     std::string contentType, bool isKeepAlive,
+                                     std::vector<std::string> cookies) {
   std::string result;
   if (payload.empty()) {
     result += "GET ";
   } else {
     result += "POST ";
   }
-  result += url_.path;
-  result += url_.query.empty() ? "" : "?" + url_.query;
+  result += url.path;
+  result += url.query.empty() ? "" : "?" + url.query;
   result += " HTTP/1.1\r\n";
   result += "Host: ";
-  result += url_.host;
+  result += url.host;
   result += "\r\nConnection: ";
   if (isKeepAlive) {
     result += "keep-alive";
@@ -29,10 +32,19 @@ std::string ZZabbix::generateRequest(const std::string& payload, bool isKeepAliv
     result += "close";
   }
   result += "\r\n";
+  if (!cookies.empty()) {
+    result += "Cookie:";
+    for (std::string s : cookies) {
+      result += " ";
+      result += s;
+      result += ";";
+    }
+    result += "\r\n";
+  }
   if (payload.empty()) {
     result += "\r\n";
   } else {
-    result += "Content-Type: application/json-rpc\r\n";
+    result += "Content-Type: " + contentType + "\r\n";
     result += "Content-Length: ";
     result += std::to_string(payload.length());
     result += "\r\n\r\n";
@@ -83,7 +95,7 @@ std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
   write_json(buf, pt, false);
 
   tcp::resolver resolver(ioService_);
-  tcp::resolver::query query(url_.host, "443");
+  tcp::resolver::query query(zabbixjsonrpc_.host, "443");
   ssl::context context(ssl::context::tlsv12_client);
   context.set_default_verify_paths();
   ssl::stream<tcp::socket> socket(ioService_, context);
@@ -91,10 +103,10 @@ std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
   socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
   socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
   socket.set_verify_mode(ssl::verify_none);
-  socket.set_verify_callback(ssl::rfc2818_verification(url_.host));
+  socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
   socket.handshake(ssl::stream<tcp::socket>::client);
 
-  std::string request = generateRequest(buf.str(), false);
+  std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
   write(socket, buffer(request.c_str(), request.length()));
 
   std::string response;
@@ -115,7 +127,49 @@ bool ZZabbix::auth() {
 
   response   = ZZabbix::parseJson(sendRequest(request));
   authToken_ = response.get<std::string>("result");
+
+  getSession();
+
   return true;
+}
+
+void ZZabbix::getSession() {
+  std::string payload;
+  payload += "name=";
+  payload += user_;
+  payload += "&password=";
+  payload += password_;
+  payload += "&enter=Sign+in";
+
+  tcp::resolver resolver(ioService_);
+  tcp::resolver::query query(zabbixlogin_.host, "443");
+  ssl::context context(ssl::context::tlsv12_client);
+  context.set_default_verify_paths();
+  ssl::stream<tcp::socket> socket(ioService_, context);
+  connect(socket.lowest_layer(), resolver.resolve(query));
+  socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
+  socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
+  socket.set_verify_mode(ssl::verify_none);
+  socket.set_verify_callback(ssl::rfc2818_verification(zabbixlogin_.host));
+  socket.handshake(ssl::stream<tcp::socket>::client);
+
+  std::string request = generateRequest(zabbixlogin_, payload, "application/x-www-form-urlencoded", false);
+  write(socket, buffer(request.c_str(), request.length()));
+
+  std::string response;
+  char buff[65536];
+  boost::system::error_code error;
+  while (!error) {
+    size_t bytes = read(socket, buffer(buff), error);
+    response += std::string(buff, bytes);
+  }
+  std::smatch sm;
+  std::regex exp("(zbx_sessionid=[a-f0-9]{32})");
+  if (std::regex_search(response, sm, exp)) {
+    zbxSessionid_ = sm[0];
+  } else {
+    throw ZZabbixException("unable to log in zabbix");
+  }
 }
 
 std::vector<std::pair<std::string, std::string>> ZZabbix::getMaintenances(int limit) {
