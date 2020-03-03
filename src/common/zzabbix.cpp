@@ -153,7 +153,8 @@ void ZZabbix::getSession() {
   socket.set_verify_callback(ssl::rfc2818_verification(zabbixlogin_.host));
   socket.handshake(ssl::stream<tcp::socket>::client);
 
-  std::string request = generateRequest(zabbixlogin_, payload, "application/x-www-form-urlencoded", false);
+  std::string request =
+      generateRequest(zabbixlogin_, payload, "application/x-www-form-urlencoded", false);
   write(socket, buffer(request.c_str(), request.length()));
 
   std::string response;
@@ -207,6 +208,34 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getMaintenances(int li
       name = "❌ ";
     }
     name += subtree.get<std::string>("name");
+    result.push_back(std::pair<std::string, std::string>(id, name));
+  }
+  return result;
+}
+
+std::vector<std::pair<std::string, std::string>> ZZabbix::getScreens(int limit) {
+  ptree request, response;
+  ptree params;
+  std::set<std::string> paramsOutput{"name", "screenid"};
+  std::vector<std::pair<std::string, std::string>> result;
+
+  for (std::string s : paramsOutput) {
+    ptree child;
+    child.put_value(s);
+    params.push_back(std::make_pair("", child));
+  }
+  request.put("method", "screen.get");
+  request.put("params.sortfield", "name");
+  request.add_child("params.output", params);
+
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    const std::string& key = v.first;
+    const ptree& subtree   = v.second;
+    std::string id, name;
+
+    id   = subtree.get<std::string>("screenid");
+    name = subtree.get<std::string>("name");
     result.push_back(std::pair<std::string, std::string>(id, name));
   }
   return result;
