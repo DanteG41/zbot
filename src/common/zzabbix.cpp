@@ -213,6 +213,7 @@ void ZZabbix::createMaintenance(std::string id, std::string name) {
 
   timeperiodChild.put("timeperiod_type", 0);
   timeperiodChild.put("period", 3600);
+  timeperiodChild.put("start_date", time);
   timeperiods.push_back(std::make_pair("", timeperiodChild));
 
   request.put("method", "maintenance.create");
@@ -220,6 +221,30 @@ void ZZabbix::createMaintenance(std::string id, std::string name) {
   request.put("params.active_since", time);
   request.put("params.active_till", time + 86400);
   request.add_child("params.groupids", groupids);
+  request.add_child("params.timeperiods", timeperiods);
+
+  response        = ZZabbix::parseJson(sendRequest(request));
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+}
+
+void ZZabbix::renewMaintenance(std::string id) {
+  ptree request, response;
+  ptree groupids, timeperiods;
+  ptree groupidChild, timeperiodChild;
+  std::time_t time = std::time(nullptr);
+
+  timeperiodChild.put("timeperiod_type", 0);
+  timeperiodChild.put("period", 3600);
+  timeperiodChild.put("start_date", time);
+  timeperiods.push_back(std::make_pair("", timeperiodChild));
+
+  request.put("method", "maintenance.update");
+  request.put("params.maintenanceid", id);
+  request.put("params.active_since", time);
+  request.put("params.active_till", time + 86400);
   request.add_child("params.timeperiods", timeperiods);
 
   response        = ZZabbix::parseJson(sendRequest(request));
