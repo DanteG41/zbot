@@ -285,6 +285,34 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) 
   return result;
 }
 
+std::vector<std::string> ZZabbix::getScreenGraphs(std::string id, int limit) {
+  ptree request, response;
+  ptree params, paramsChild;
+  std::vector<std::string> result;
+
+  paramsChild.put_value("resourceid");
+  params.push_back(std::make_pair("", paramsChild));
+
+  request.put("method", "screenitem.get");
+  request.put("params.screenids", id);
+  request.add_child("params.output", params);
+  request.put("params.filter.resourcetype", 0);
+
+  response = ZZabbix::parseJson(sendRequest(request));
+
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+
+  for (ptree::value_type const& v : response.get_child("result")) {
+    const std::string& key = v.first;
+    const ptree& subtree   = v.second;
+    result.push_back(subtree.get<std::string>("resourceid"));
+  }
+  return result;
+}
+
 void ZZabbix::createMaintenance(std::string id, std::string name) {
   ptree request, response;
   ptree groupids, timeperiods;

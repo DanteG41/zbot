@@ -30,6 +30,7 @@ public:
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getScreens(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getHostGrp(int limit = 100);
+  std::vector<std::string> getScreenGraphs(std::string id, int limit = 100);
   std::string getMaintenanceName(std::string id);
   void createMaintenance(std::string id, std::string name);
   void renewMaintenance(std::string id);
