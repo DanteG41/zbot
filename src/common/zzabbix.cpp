@@ -253,3 +253,20 @@ void ZZabbix::renewMaintenance(std::string id) {
     throw ZZabbixException(response.get<std::string>("error.data", ""));
   }
 }
+
+void ZZabbix::deleteMaintenance(std::string id) {
+  ptree request, response;
+  ptree ids, idsChild;
+
+  idsChild.put_value(id);
+  ids.push_back(std::make_pair("", idsChild));
+
+  request.put("method", "maintenance.delete");
+  request.add_child("params", ids);
+
+  response        = ZZabbix::parseJson(sendRequest(request));
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+}

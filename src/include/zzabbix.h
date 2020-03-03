@@ -26,6 +26,7 @@ public:
   std::string getMaintenanceName(std::string id);
   void createMaintenance(std::string id, std::string name);
   void renewMaintenance(std::string id);
+  void deleteMaintenance(std::string id);
 };
 
 class ZZabbixException {
