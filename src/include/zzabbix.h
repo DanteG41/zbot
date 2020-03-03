@@ -12,6 +12,7 @@ private:
   std::string zbxSessionid_;
   TgBot::Url zabbixjsonrpc_;
   TgBot::Url zabbixlogin_;
+  TgBot::Url zabbixchart2_;
 
   long id_ = 0;
   void getSession();
@@ -25,12 +26,14 @@ private:
 public:
   ZZabbix(const char* s, const char* u, const char* p)
       : zabbixjsonrpc_(s + std::string("api_jsonrpc.php")),
-        zabbixlogin_(s + std::string("index.php")), user_(u), password_(p){};
+        zabbixlogin_(s + std::string("index.php")), zabbixchart2_(s + std::string("chart2.php")),
+        user_(u), password_(p){};
   bool auth();
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getScreens(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getHostGrp(int limit = 100);
   std::vector<std::string> getScreenGraphs(std::string id, int limit = 100);
+  std::vector<std::string> downloadGraphs(std::vector<std::string> ids);
   std::string getMaintenanceName(std::string id);
   void createMaintenance(std::string id, std::string name);
   void renewMaintenance(std::string id);

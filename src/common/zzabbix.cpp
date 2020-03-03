@@ -173,6 +173,50 @@ void ZZabbix::getSession() {
   }
 }
 
+std::vector<std::string> ZZabbix::downloadGraphs(std::vector<std::string> ids) {
+  std::time_t time = std::time(nullptr);
+  std::vector<std::string> cookies;
+  std::vector<std::string> result;
+  cookies.push_back(zbxSessionid_);
+
+  tcp::resolver resolver(ioService_);
+  tcp::resolver::query query(zabbixlogin_.host, "443");
+  ssl::context context(ssl::context::tlsv12_client);
+  context.set_default_verify_paths();
+
+  for (std::string id : ids) {
+    ssl::stream<tcp::socket> socket(ioService_, context);
+    connect(socket.lowest_layer(), resolver.resolve(query));
+    socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
+    socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
+    socket.set_verify_mode(ssl::verify_none);
+    socket.set_verify_callback(ssl::rfc2818_verification(zabbixlogin_.host));
+    socket.handshake(ssl::stream<tcp::socket>::client);
+    std::string filename = "/tmp/" + id + "_" + std::to_string(time) + ".png";
+    zabbixchart2_.query  = "graphid=";
+    zabbixchart2_.query += id;
+    zabbixchart2_.query += "&period=3600&isNow=1&width=500&height=100&legend=1";
+
+    std::string request =
+        generateRequest(zabbixchart2_, "", "application/x-www-form-urlencoded", false, cookies);
+    write(socket, buffer(request.c_str(), request.length()));
+
+    std::string response;
+    char buff[65536];
+    boost::system::error_code error;
+    while (!error) {
+      size_t bytes = read(socket, buffer(buff), error);
+      response += std::string(buff, bytes);
+    }
+    std::ofstream graphimg;
+    graphimg.open(filename);
+    graphimg << ZZabbix::extractBody(response);
+    graphimg.close();
+    result.push_back(filename);
+  }
+  return result;
+}
+
 std::vector<std::pair<std::string, std::string>> ZZabbix::getMaintenances(int limit) {
   ptree request, response;
   ptree params;
