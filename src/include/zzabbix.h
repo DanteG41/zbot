@@ -19,7 +19,6 @@ private:
 
 public:
   ZZabbix(const char* s, const char* u, const char* p) : url_(s), user_(u), password_(p){};
-  std::string listMaintenance();
   bool auth();
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getHostGrp(int limit = 100);

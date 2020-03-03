@@ -100,6 +100,37 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().editMessageText("*Maintenance:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, maintenanceMenu);
+      } else if (callback->data.compare(0, 19, "maintenance.select ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr maintenanceMenuSelect =
+            zworker::createMenu(zworker::Menu::MAINTENANCESELECT, zabbix, 0, callbackData[1]);
+        bot.getApi().editMessageText(
+            "*Maintenance: " + zabbix.getMaintenanceName(callbackData[1]) + "*",
+            callback->message->chat->id, callback->message->messageId, callback->inlineMessageId,
+            "Markdown", false, maintenanceMenuSelect);
+      } else if (callback->data.compare(0, 18, "maintenance.renew ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        std::string response = "✅ Maintenance period renew";
+        try {
+          zabbix.renewMaintenance(callbackData[1]);
+        } catch (ZZabbixException& e) {
+          response = "⚠️ ERROR: " + std::string(e.getError());
+        }
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, response);
+      } else if (callback->data.compare(0, 19, "maintenance.delete ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        std::string response = "✅ Maintenance period delete";
+        try {
+          zabbix.deleteMaintenance(callbackData[1]);
+        } catch (ZZabbixException& e) {
+          response = "⚠️ ERROR: " + std::string(e.getError());
+        }
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, response);
       }
     }
   });
@@ -319,8 +350,8 @@ void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callb
   }
 }
 
-TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix& zabbix,
-                                                     int page) {
+TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix& zabbix, int page,
+                                                     std::string callback) {
 
   switch (menu) {
   case zworker::Menu::MAIN: {
@@ -381,6 +412,28 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     maintenancerow.push_back(create);
     maintenanceMenu->inlineKeyboard.push_back(maintenancerow);
     return maintenanceMenu;
+  }
+  case zworker::Menu::MAINTENANCESELECT: {
+    auto maintenanceMenuSelect(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto renewButton(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto deleteButton(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto backButton(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow1;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow2;
+
+    renewButton->text          = "Renew for 1 hour";
+    renewButton->callbackData  = "maintenance.renew " + callback;
+    deleteButton->text         = "Delete";
+    deleteButton->callbackData = "maintenance.delete " + callback;
+    backButton->text           = "Back";
+    backButton->callbackData   = "maintenance";
+
+    maintenancerow1.push_back(renewButton);
+    maintenancerow1.push_back(deleteButton);
+    maintenancerow2.push_back(backButton);
+    maintenanceMenuSelect->inlineKeyboard.push_back(maintenancerow1);
+    maintenanceMenuSelect->inlineKeyboard.push_back(maintenancerow2);
+    return maintenanceMenuSelect;
   }
   case zworker::Menu::MAINTENANCESELECTHOSTGRP: {
     auto maintenanceMenuSelectHostGrp(std::make_shared<TgBot::InlineKeyboardMarkup>());
