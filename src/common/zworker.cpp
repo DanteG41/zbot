@@ -42,7 +42,11 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   bot.getEvents().onCallbackQuery([&bot, &mainMenu, &infoMenu, &configBot, &zabbix,
                                    &waitEvent](TgBot::CallbackQuery::Ptr callback) {
     if (configBot.adminUsers.count(callback->from->username)) {
-      if (callback->data == "info") {
+      if (callback->data == "main") {
+        bot.getApi().editMessageText("*Selecting an action:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, mainMenu);
+      } else if (callback->data == "info") {
         bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, infoMenu);
@@ -384,16 +388,22 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     auto infoMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto getchatid(std::make_shared<TgBot::InlineKeyboardButton>());
     auto userlist(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
     std::vector<TgBot::InlineKeyboardButton::Ptr> inforow;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> inforow2;
 
     getchatid->text         = "Get chatid";
     getchatid->callbackData = "getchatid";
     userlist->text          = "User list";
     userlist->callbackData  = "userlist";
+    back->text              = "Back";
+    back->callbackData      = "main";
 
     inforow.push_back(getchatid);
     inforow.push_back(userlist);
+    inforow2.push_back(back);
     infoMenu->inlineKeyboard.push_back(inforow);
+    infoMenu->inlineKeyboard.push_back(inforow2);
     return infoMenu;
   }
   case zworker::Menu::ACTION:
@@ -401,16 +411,22 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
   case zworker::Menu::MAINTENANCE: {
     auto maintenanceMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto create(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
     std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow2;
 
     create->text         = "Create new maintenance period";
     create->callbackData = "createmaintenance";
+    back->text           = "Back";
+    back->callbackData   = "main";
 
     zworker::addList(maintenanceMenu, "maintenance.select", &zabbix, &ZZabbix::getMaintenances,
                      page);
 
     maintenancerow.push_back(create);
+    maintenancerow2.push_back(back);
     maintenanceMenu->inlineKeyboard.push_back(maintenancerow);
+    maintenanceMenu->inlineKeyboard.push_back(maintenancerow2);
     return maintenanceMenu;
   }
   case zworker::Menu::MAINTENANCESELECT: {
