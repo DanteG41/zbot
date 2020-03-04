@@ -102,6 +102,39 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
 
+      } else if (callback->data.compare(0, 14, "screen.select ") == 0) {
+        std::vector<std::string> callbackData, images;
+        std::vector<TgBot::InputMedia::Ptr> media;
+        std::vector<TgBot::InputFile::Ptr> files;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        try {
+          int c  = 0;
+          images = zabbix.downloadGraphs(zabbix.getScreenGraphs(callbackData[1]));
+
+          if (images.size() == 0) bot.getApi().sendMessage(callback->message->chat->id, "No graphs on the selected complex screen.");
+
+          for (std::vector<std::string>::iterator it = images.begin(); it != images.end(); it++) {
+            auto graph(std::make_shared<TgBot::InputMediaPhoto>());
+            TgBot::InputFile::Ptr file = TgBot::InputFile::fromFile(*it, "image/png");
+            graph->media               = "attach://" + file->fileName;
+            media.push_back(graph);
+            files.push_back(file);
+            c++;
+            // Send it in batches , so as not to exceed the telegram limit.
+            if (c == 10 || std::distance(images.begin(), it) + 1 == images.size()) {
+              bot.getApi().sendMediaGroup(callback->message->chat->id, media, files);
+              
+              media.clear();
+              files.clear();
+              c = 0;
+            }
+          }
+          zworker::removeFiles(images);
+        } catch (ZZabbixException& e) {
+          zworker::removeFiles(images);
+          bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
+        }
       } else if (callback->data.compare(0, 18, "screen.select.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -562,4 +595,12 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
   }
   zbot::log << "zbotd: stopped sender worker";
   return zbot::ChildSignal::CHILD_TERMINATE;
+}
+
+void zworker::removeFiles(std::vector<std::string> files) {
+  for (std::string s : files) {
+    if (s.compare(0, 5, "/tmp/") == 0) {
+      unlink(s.c_str());
+    }
+  }
 }

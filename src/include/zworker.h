@@ -17,4 +17,5 @@ void addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callbackName, 
 void addButton(std::vector<TgBot::InlineKeyboardButton::Ptr>& row, std::string text,
                std::string callbackData);
 void senderGetParams(ZConfig& tc, zbot::config& c);
+void removeFiles(std::vector<std::string> files);
 } // namespace zworker
