@@ -257,6 +257,35 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getMaintenances(int li
   return result;
 }
 
+std::vector<std::pair<std::string, std::string>> ZZabbix::getActions(int status, int limit) {
+  ptree request, response;
+  ptree params;
+  std::set<std::string> paramsOutput{"name", "actionid"};
+  std::vector<std::pair<std::string, std::string>> result;
+
+  for (std::string s : paramsOutput) {
+    ptree child;
+    child.put_value(s);
+    params.push_back(std::make_pair("", child));
+  }
+  request.put("method", "action.get");
+  request.put("params.sortfield", "name");
+  request.add_child("params.output", params);
+  request.put("params.filter.status", status);
+
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    const std::string& key = v.first;
+    const ptree& subtree   = v.second;
+    std::string id, name;
+
+    id   = subtree.get<std::string>("actionid");
+    name = subtree.get<std::string>("name");
+    result.push_back(std::pair<std::string, std::string>(id, name));
+  }
+  return result;
+}
+
 std::vector<std::pair<std::string, std::string>> ZZabbix::getScreens(int limit) {
   ptree request, response;
   ptree params;
