@@ -102,17 +102,32 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
 
-      } else if (callback->data.compare(0, 14, "screen.select ") == 0) {
+      } else if (callback->data.compare(0, 14, "screen.select ") == 0 ||
+                 callback->data.compare(0, 22, "screen.select.refresh ") == 0) {
         std::vector<std::string> callbackData, images;
         std::vector<TgBot::InputMedia::Ptr> media;
         std::vector<TgBot::InputFile::Ptr> files;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        if (callbackData[0] == "screen.select.refresh") {
+          for (int c = 2; c != callbackData.size(); ++c) {
+            bot.getApi().deleteMessage(callback->message->chat->id, std::stoi(callbackData[c]));
+          }
+        }
         try {
-          int c  = 0;
-          images = zabbix.downloadGraphs(zabbix.getScreenGraphs(callbackData[1]));
+          int c        = 0;
+          bool refresh = true;
+          images       = zabbix.downloadGraphs(zabbix.getScreenGraphs(callbackData[1]));
+          std::string refreshButtonCallbackData;
+          auto refreshMarkup(std::make_shared<TgBot::InlineKeyboardMarkup>());
+          auto refreshButton(std::make_shared<TgBot::InlineKeyboardButton>());
+          std::vector<TgBot::InlineKeyboardButton::Ptr> refreshrow;
+          refreshButton->text         = "Refresh";
+          refreshButton->callbackData = "screen.select.refresh " + callbackData[1];
 
-          if (images.size() == 0) bot.getApi().sendMessage(callback->message->chat->id, "No graphs on the selected complex screen.");
+          if (images.size() == 0)
+            bot.getApi().sendMessage(callback->message->chat->id,
+                                     "No graphs on the selected complex screen.");
 
           for (std::vector<std::string>::iterator it = images.begin(); it != images.end(); it++) {
             auto graph(std::make_shared<TgBot::InputMediaPhoto>());
@@ -123,14 +138,32 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             c++;
             // Send it in batches , so as not to exceed the telegram limit.
             if (c == 10 || std::distance(images.begin(), it) + 1 == images.size()) {
-              bot.getApi().sendMediaGroup(callback->message->chat->id, media, files);
-              
+              std::vector<TgBot::Message::Ptr> msg;
+              msg = bot.getApi().sendMediaGroup(callback->message->chat->id, media, files);
+              for (TgBot::Message::Ptr pt : msg) {
+                std::string id = std::to_string(pt->messageId);
+                // do not exceed telegram limit
+                if (refreshButtonCallbackData.size() + id.size() >
+                    64 - refreshButton->callbackData.size()) {
+                  refresh = false;
+                  break;
+                }
+                refreshButtonCallbackData += " " + id;
+              }
               media.clear();
               files.clear();
               c = 0;
             }
           }
           zworker::removeFiles(images);
+          if (refresh) {
+            refreshButton->callbackData += refreshButtonCallbackData;
+            refreshrow.push_back(refreshButton);
+            refreshMarkup->inlineKeyboard.push_back(refreshrow);
+            bot.getApi().sendMessage(callback->message->chat->id,
+                                     "*Screen \"" + zabbix.getScreenName(callbackData[1]) + "\":*", false, 0,
+                                     refreshMarkup, "MarkDown");
+          }
         } catch (ZZabbixException& e) {
           zworker::removeFiles(images);
           bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
