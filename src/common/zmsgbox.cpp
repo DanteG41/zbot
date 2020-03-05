@@ -49,6 +49,7 @@ void ZMsgBox::load(int maxMessage) {
     fullpath = path_ + "/" + dp->d_name;
     stat(fullpath.c_str(), &st);
     if (S_ISREG(st.st_mode)) {
+      if (std::string(dp->d_name) == "sending_off") continue;
       std::ifstream msgFile;
       msgFile.open(fullpath.c_str());
       files_.push_back(dp->d_name);
@@ -93,7 +94,13 @@ void ZMsgBox::printMessage() {
   }
 }
 
-std::vector<std::string> ZMsgBox::popMessages() { return messages_; };
+std::vector<std::string> ZMsgBox::popMessages() {
+  if (status) {
+    return messages_;
+  } else {
+    return std::vector<std::string>();
+  }
+};
 
 float levensteinDistance(std::string& s, std::string& t) {
   float distance = 0;

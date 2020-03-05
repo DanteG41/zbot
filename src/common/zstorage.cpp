@@ -4,6 +4,17 @@
 
 int ZStorage::updateStat() { return stat(path_.c_str(), &stat_buf_); }
 
+bool ZStorage::checkTrigger() {
+  std::string triggerFile = path_ + "/sending_off";
+  struct stat st;
+  stat(triggerFile.c_str(), &st);
+  if (S_ISREG(st.st_mode)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 void ZStorage::checkDir() {
   if (updateStat() != 0) {
     if (errno == ENOENT) {
