@@ -50,6 +50,12 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, infoMenu);
+      } else if (callback->data == "actions") {
+        TgBot::InlineKeyboardMarkup::Ptr actionMenu = zworker::createMenu(
+            zworker::Menu::ACTION, zabbix, 0, "", std::to_string(callback->message->chat->id));
+        bot.getApi().editMessageText("*Actions:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, actionMenu);
       } else if (callback->data == "screen") {
         TgBot::InlineKeyboardMarkup::Ptr screenMenu =
             zworker::createMenu(zworker::Menu::SCREEN, zabbix);
@@ -82,6 +88,97 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
                                      callback->message->chat->id, callback->message->messageId,
                                      callback->inlineMessageId, "Markdown", false,
                                      maintenanceMenuSelectHostGrp);
+      } else if (callback->data == "action.enable") {
+        TgBot::InlineKeyboardMarkup::Ptr actionEnableSelect =
+            zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix);
+        bot.getApi().editMessageText("*Actions/Select disabled:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, actionEnableSelect);
+      } else if (callback->data == "action.disable") {
+        TgBot::InlineKeyboardMarkup::Ptr actionDisableSelect =
+            zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix);
+        bot.getApi().editMessageText("*Actions/Select enabled:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, actionDisableSelect);
+      } else if (callback->data.compare(0, 18, "action.enable.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr actionEnableSelect =
+            zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Actions/Select disabled:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, actionEnableSelect);
+      } else if (callback->data.compare(0, 19, "action.disable.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr actionDisableSelect =
+            zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Actions/Select enabled:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, actionDisableSelect);
+      } else if (callback->data.compare(0, 15, "action.disable ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        try {
+          bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+          zabbix.updateStatusAction(callbackData[1], 1);
+          bot.getApi().sendMessage(callback->message->chat->id,
+                                   "Disabled action: \"" + zabbix.getActionName(callbackData[1]) +
+                                       "\"");
+        } catch (ZZabbixException& e) {
+          bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
+        }
+      } else if (callback->data.compare(0, 14, "action.enable ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        try {
+          bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+          zabbix.updateStatusAction(callbackData[1], 0);
+          bot.getApi().sendMessage(callback->message->chat->id,
+                                   "Enabled action: \"" + zabbix.getActionName(callbackData[1]) +
+                                       "\"");
+        } catch (ZZabbixException& e) {
+          bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
+        }
+      } else if (callback->data == "action.stopall") {
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        std::string storagePath, triggerPath;
+        zbot::mainConfig.getParam("storage", storagePath);
+        triggerPath = storagePath + "/sending_off";
+        std::ofstream trigger(triggerPath);
+        bot.getApi().sendMessage(callback->message->chat->id,
+                                 "Disabled sending messages for all chats.");
+      } else if (callback->data == "action.stopchat") {
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        std::string storagePath, triggerPath;
+        zbot::mainConfig.getParam("storage", storagePath);
+        triggerPath = storagePath + "/pending/" + std::to_string(callback->message->chat->id) +
+                      "/sending_off";
+        std::ofstream trigger(triggerPath);
+        bot.getApi().sendMessage(
+            callback->message->chat->id,
+            "Disabled sending messages for chat: " + callback->message->chat->title +
+                callback->message->chat->firstName);
+      } else if (callback->data == "action.startall") {
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        std::string storagePath, triggerPath;
+        zbot::mainConfig.getParam("storage", storagePath);
+        triggerPath = storagePath + "/sending_off";
+        unlink(triggerPath.c_str());
+        bot.getApi().sendMessage(callback->message->chat->id,
+                                 "Enabled sending messages for all chats.");
+      } else if (callback->data == "action.startchat") {
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        std::string storagePath, triggerPath;
+        zbot::mainConfig.getParam("storage", storagePath);
+        triggerPath = storagePath + "/pending/" + std::to_string(callback->message->chat->id) +
+                      "/sending_off";
+        std::ofstream trigger(triggerPath.c_str());
+        unlink(triggerPath.c_str());
+        bot.getApi().sendMessage(
+            callback->message->chat->id,
+            "Enabled sending messages for chat: " + callback->message->chat->title +
+                callback->message->chat->firstName);
       } else if (callback->data.compare(0, 34, "maintenance.create.select.grp.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -161,8 +258,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             refreshrow.push_back(refreshButton);
             refreshMarkup->inlineKeyboard.push_back(refreshrow);
             bot.getApi().sendMessage(callback->message->chat->id,
-                                     "*Screen \"" + zabbix.getScreenName(callbackData[1]) + "\":*", false, 0,
-                                     refreshMarkup, "MarkDown");
+                                     "*Screen \"" + zabbix.getScreenName(callbackData[1]) + "\":*",
+                                     false, 0, refreshMarkup, "MarkDown");
           }
         } catch (ZZabbixException& e) {
           zworker::removeFiles(images);
@@ -397,12 +494,8 @@ std::vector<TgBot::InlineKeyboardButton::Ptr> zworker::createPaginator(int curr,
 }
 
 void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callbackName,
-                      ZZabbix* zabbix,
-                      std::vector<std::pair<std::string, std::string>> (ZZabbix::*fp)(int),
+                      ZZabbix* zabbix, std::vector<std::pair<std::string, std::string>> data,
                       int page, int lineperpage) {
-  std::vector<std::pair<std::string, std::string>> data;
-  data = (zabbix->*fp)(100);
-
   if (data.size() > lineperpage) {
     for (int c = 0; c < lineperpage; ++c) {
       auto button(std::make_shared<TgBot::InlineKeyboardButton>());
@@ -435,7 +528,7 @@ void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callb
 }
 
 TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix& zabbix, int page,
-                                                     std::string callback) {
+                                                     std::string callback, std::string chatid) {
 
   switch (menu) {
   case zworker::Menu::MAIN: {
@@ -486,8 +579,86 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     infoMenu->inlineKeyboard.push_back(inforow2);
     return infoMenu;
   }
-  case zworker::Menu::ACTION:
-    break;
+  case zworker::Menu::ACTION: {
+    std::string storagePath;
+    auto actionMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto enable(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto disable(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto stopall(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto stopchat(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow1;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow2;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow3;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow4;
+
+    enable->text          = "Enable action";
+    enable->callbackData  = "action.enable";
+    disable->text         = "Disable action";
+    disable->callbackData = "action.disable";
+
+    zbot::mainConfig.getParam("storage", storagePath);
+    struct stat stall;
+    struct stat stchat;
+    std::string triggerFileForAll  = storagePath + "/sending_off";
+    std::string triggerFileForChat = storagePath + "/pending/" + chatid + "/sending_off";
+    stat(triggerFileForAll.c_str(), &stall);
+    stat(triggerFileForChat.c_str(), &stchat);
+
+    if (S_ISREG(stall.st_mode)) {
+      stopall->text         = "Start all messages";
+      stopall->callbackData = "action.startall";
+    } else {
+      stopall->text         = "Stop all messages";
+      stopall->callbackData = "action.stopall";
+    }
+    if (S_ISREG(stchat.st_mode)) {
+      stopchat->text         = "Start messages in this chat";
+      stopchat->callbackData = "action.startchat";
+    } else {
+      stopchat->text         = "Stop messages in this chat";
+      stopchat->callbackData = "action.stopchat";
+    }
+    back->text         = "Back";
+    back->callbackData = "main";
+
+    actionrow1.push_back(enable);
+    actionrow1.push_back(disable);
+    actionrow2.push_back(stopall);
+    actionrow3.push_back(stopchat);
+    actionrow4.push_back(back);
+    actionMenu->inlineKeyboard.push_back(actionrow1);
+    actionMenu->inlineKeyboard.push_back(actionrow2);
+    actionMenu->inlineKeyboard.push_back(actionrow3);
+    actionMenu->inlineKeyboard.push_back(actionrow4);
+    return actionMenu;
+  }
+  case zworker::Menu::ACTIONENABLE: {
+    auto actionMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow;
+
+    back->text         = "Back";
+    back->callbackData = "actions";
+
+    zworker::addList(actionMenu, "action.enable", &zabbix, &ZZabbix::getActions, 1, page);
+    actionrow.push_back(back);
+    actionMenu->inlineKeyboard.push_back(actionrow);
+    return actionMenu;
+  }
+  case zworker::Menu::ACTIONDISABLE: {
+    auto actionMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto back(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> actionrow;
+
+    back->text         = "Back";
+    back->callbackData = "actions";
+
+    zworker::addList(actionMenu, "action.disable", &zabbix, &ZZabbix::getActions, 0, page);
+    actionrow.push_back(back);
+    actionMenu->inlineKeyboard.push_back(actionrow);
+    return actionMenu;
+  }
   case zworker::Menu::SCREEN: {
     auto screenMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
     auto back(std::make_shared<TgBot::InlineKeyboardButton>());
@@ -604,6 +775,7 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
     try {
       for (std::string chat : pendingStorage.listChats()) {
         ZMsgBox sendBox(pendingStorage, chat.c_str());
+        if (!zbotStorage.checkTrigger() || !sendBox.checkTrigger()) sendBox.disable();
         sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
         if (sendBox.size() > configSender.minapprox) {
@@ -611,8 +783,10 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
         } else {
           messages = sendBox.popMessages();
         }
-        for (std::string msg : messages) {
-          tbot.send(atoll(chat.c_str()), msg);
+        if (sendBox.getStatus()) {
+          for (std::string msg : messages) {
+            tbot.send(atoll(chat.c_str()), msg);
+          }
         }
         sendBox.erase();
       }
