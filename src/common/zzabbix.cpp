@@ -358,6 +358,21 @@ std::string ZZabbix::getScreenName(std::string id) {
   }
 }
 
+std::string ZZabbix::getActionName(std::string id) {
+  ptree request, response;
+  ptree params, paramsChild;
+  paramsChild.put_value("name");
+  params.push_back(std::make_pair("", paramsChild));
+  request.put("method", "action.get");
+  request.put("params.actionids", id);
+  request.add_child("params.output", params);
+  std::cout << sendRequest(request);
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    return v.second.get<std::string>("name");
+  }
+}
+
 std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) {
   ptree request, response;
   ptree params;
