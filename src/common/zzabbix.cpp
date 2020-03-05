@@ -286,6 +286,20 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getActions(int status,
   return result;
 }
 
+void ZZabbix::updateStatusAction(std::string id, int status) {
+  ptree request, response;
+
+  request.put("method", "action.update");
+  request.put("params.actionid", id);
+  request.put("params.status", std::to_string(status));
+
+  response        = ZZabbix::parseJson(sendRequest(request));
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+}
+
 std::vector<std::pair<std::string, std::string>> ZZabbix::getScreens(int limit) {
   ptree request, response;
   ptree params;

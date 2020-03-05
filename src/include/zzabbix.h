@@ -38,6 +38,7 @@ public:
   std::string getMaintenanceName(std::string id);
   std::string getScreenName(std::string id);
   void createMaintenance(std::string id, std::string name);
+  void updateStatusAction(std::string id, int status);
   void renewMaintenance(std::string id);
   void deleteMaintenance(std::string id);
 };
