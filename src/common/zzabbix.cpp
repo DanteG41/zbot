@@ -286,6 +286,58 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getActions(int status,
   return result;
 }
 
+std::vector<std::pair<std::string, std::string>> ZZabbix::getProblems(int group, int limit) {
+  ptree request, response;
+  ptree params;
+  std::time_t time = std::time(nullptr);
+  std::set<std::string> paramsOutput{"description", "triggerid"};
+  std::vector<std::pair<std::string, std::string>> result;
+
+  for (std::string s : paramsOutput) {
+    ptree child;
+    child.put_value(s);
+    params.push_back(std::make_pair("", child));
+  }
+  request.put("method", "trigger.get");
+  request.put("params.groupids", group);
+  request.put("params.expandDescription", "1");
+  // filter only active disaster
+  request.put("params.min_severity", "5");
+  request.put("params.monitored", "1");
+  request.put("params.time_from", std::to_string(time - 1209600));
+  request.put("params.filter.value", "1");
+  request.put("params.withLastEventUnacknowledged", "1");
+  request.add_child("params.output", params);
+
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    const std::string& key = v.first;
+    const ptree& subtree   = v.second;
+    std::string id, name;
+
+    id   = subtree.get<std::string>("triggerid");
+    name = subtree.get<std::string>("description");
+    result.push_back(std::pair<std::string, std::string>(id, name));
+  }
+  return result;
+}
+
+void ZZabbix::ackProblem(std::string id, std::string message) {
+  ptree request, response;
+  ptree groupids, timeperiods;
+  ptree groupidChild, timeperiodChild;
+
+  request.put("method", "event.acknowledge");
+  request.put("params.eventids", id);
+  request.put("params.message", message);
+
+  response        = ZZabbix::parseJson(sendRequest(request));
+  std::string err = response.get<std::string>("error.data", "");
+  if (!err.empty()) {
+    throw ZZabbixException(response.get<std::string>("error.data", ""));
+  }
+}
+
 void ZZabbix::updateStatusAction(std::string id, int status) {
   ptree request, response;
 
@@ -373,7 +425,37 @@ std::string ZZabbix::getActionName(std::string id) {
   }
 }
 
-std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) {
+std::string ZZabbix::getHostGrpName(std::string id) {
+  ptree request, response;
+  ptree params, paramsChild;
+  paramsChild.put_value("name");
+  params.push_back(std::make_pair("", paramsChild));
+  request.put("method", "hostgroup.get");
+  request.put("params.groupids", id);
+  request.add_child("params.output", params);
+  std::cout << sendRequest(request);
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    return v.second.get<std::string>("name");
+  }
+}
+
+std::string ZZabbix::getEvent(std::string id) {
+  ptree request, response;
+  ptree params, paramsChild;
+  paramsChild.put_value("eventid");
+  params.push_back(std::make_pair("", paramsChild));
+  request.put("method", "event.get");
+  request.put("params.objectids", id);
+  request.add_child("params.output", params);
+  std::cout << sendRequest(request);
+  response = ZZabbix::parseJson(sendRequest(request));
+  for (ptree::value_type const& v : response.get_child("result")) {
+    return v.second.get<std::string>("eventid");
+  }
+}
+
+std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int filter, int limit) {
   ptree request, response;
   ptree params;
   std::set<std::string> paramsOutput{"name", "groupid"};
@@ -386,6 +468,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) 
   }
   request.put("method", "hostgroup.get");
   request.put("params.sortfield", "name");
+  request.put("params.monitored_hosts", "1");
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));
@@ -397,6 +480,9 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int limit) 
 
     id = subtree.get<std::string>("groupid");
     name += subtree.get<std::string>("name");
+    if (filter == 1) {
+      if (getProblems(std::stoi(id)).size() == 0) continue;
+    }
     result.push_back(std::pair<std::string, std::string>(id, name));
   }
   return result;
