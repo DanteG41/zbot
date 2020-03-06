@@ -16,7 +16,7 @@ extern char** progName;
 extern int argc;
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
 struct config {
-  std::set<std::string> adminUsers;
+  std::set<std::string> adminUsers, notifyChats;
   std::string path, token, webhookPublicHost, webhookPath;
   std::string zabbixUrl, zabbixUser, zabbixPassword;
   int maxmessages, minapprox, wait, webhookBindPort;

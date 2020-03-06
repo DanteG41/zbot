@@ -42,6 +42,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   bot.getEvents().onCallbackQuery([&bot, &mainMenu, &infoMenu, &configBot, &zabbix,
                                    &waitEvent](TgBot::CallbackQuery::Ptr callback) {
     if (configBot.adminUsers.count(callback->from->username)) {
+      std::string messageText;
+      bool notify = false;
       if (callback->data == "main") {
         bot.getApi().editMessageText("*Selecting an action:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
@@ -122,9 +124,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         try {
           bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
           zabbix.updateStatusAction(callbackData[1], 1);
-          bot.getApi().sendMessage(callback->message->chat->id,
-                                   "Disabled action: \"" + zabbix.getActionName(callbackData[1]) +
-                                       "\"");
+          notify      = true;
+          messageText = "User @" + callback->from->username + " disabled action: \"" +
+                        zabbix.getActionName(callbackData[1]) + "\"";
+          bot.getApi().sendMessage(callback->message->chat->id, messageText);
         } catch (ZZabbixException& e) {
           bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
         }
@@ -134,9 +137,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         try {
           bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
           zabbix.updateStatusAction(callbackData[1], 0);
-          bot.getApi().sendMessage(callback->message->chat->id,
-                                   "Enabled action: \"" + zabbix.getActionName(callbackData[1]) +
-                                       "\"");
+          notify      = true;
+          messageText = "User @" + callback->from->username + " enabled action: \"" +
+                        zabbix.getActionName(callbackData[1]) + "\"";
+          bot.getApi().sendMessage(callback->message->chat->id, messageText);
         } catch (ZZabbixException& e) {
           bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
         }
@@ -146,8 +150,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         zbot::mainConfig.getParam("storage", storagePath);
         triggerPath = storagePath + "/sending_off";
         std::ofstream trigger(triggerPath);
-        bot.getApi().sendMessage(callback->message->chat->id,
-                                 "Disabled sending messages for all chats.");
+        notify = true;
+        messageText =
+            "User @" + callback->from->username + " disabled sending messages for all chats.";
+        bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.stopchat") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         std::string storagePath, triggerPath;
@@ -155,18 +161,21 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         triggerPath = storagePath + "/pending/" + std::to_string(callback->message->chat->id) +
                       "/sending_off";
         std::ofstream trigger(triggerPath);
-        bot.getApi().sendMessage(
-            callback->message->chat->id,
-            "Disabled sending messages for chat: " + callback->message->chat->title +
-                callback->message->chat->firstName);
+        notify      = true;
+        messageText = "User @" + callback->from->username +
+                      " disabled sending messages for chat: " + callback->message->chat->title +
+                      callback->message->chat->firstName;
+        bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.startall") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         std::string storagePath, triggerPath;
         zbot::mainConfig.getParam("storage", storagePath);
         triggerPath = storagePath + "/sending_off";
         unlink(triggerPath.c_str());
-        bot.getApi().sendMessage(callback->message->chat->id,
-                                 "Enabled sending messages for all chats.");
+        notify = true;
+        messageText =
+            "User @" + callback->from->username + " enabled sending messages for all chats.";
+        bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.startchat") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         std::string storagePath, triggerPath;
@@ -175,10 +184,11 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
                       "/sending_off";
         std::ofstream trigger(triggerPath.c_str());
         unlink(triggerPath.c_str());
-        bot.getApi().sendMessage(
-            callback->message->chat->id,
-            "Enabled sending messages for chat: " + callback->message->chat->title +
-                callback->message->chat->firstName);
+        notify      = true;
+        messageText = "User @" + callback->from->username +
+                      " enabled sending messages for chat: " + callback->message->chat->title +
+                      callback->message->chat->firstName;
+        bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data.compare(0, 34, "maintenance.create.select.grp.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -313,6 +323,11 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, response);
       }
+      if (notify) {
+        for (std::string s : configBot.notifyChats) {
+          bot.getApi().sendMessage(std::stoi(s), messageText);
+        }
+      }
     }
   });
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
@@ -412,11 +427,12 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
 }
 
 void zworker::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
-  std::string adminUsers;
+  std::string adminUsers, notifyChats;
 
   try {
     tc.getParam("token", c.token);
     tc.getParam("admin_users", adminUsers);
+    tc.getParam("notify_chats", notifyChats);
     tc.getParam("webhook_enable", c.webhook);
     tc.getParam("webhook_path", c.webhookPath);
     tc.getParam("webhook_public_host", c.webhookPublicHost);
@@ -431,6 +447,7 @@ void zworker::botGetParams(ZConfig& tc, ZConfig& zc, zbot::config& c) {
 
   // parse and place the list of users in the set container
   boost::split(c.adminUsers, adminUsers, boost::is_any_of(";, "));
+  boost::split(c.notifyChats, notifyChats, boost::is_any_of(";, "));
 }
 
 void zworker::addButton(std::vector<TgBot::InlineKeyboardButton::Ptr>& row, std::string text,

@@ -16,6 +16,7 @@ std::map<std::string, std::string> defaultconfig::zabbixParams = {
 std::map<std::string, std::string> defaultconfig::telegramParams = {
     {"token", "*token*"},
     {"admin_users", ""},
+    {"notify_chats", ""},
     {"webhook_enable", "0"},
     {"webhook_path", "/zbot/webhook?token=randomhash"},
     {"webhook_public_host", "zbot.org"},
