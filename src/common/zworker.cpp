@@ -208,7 +208,6 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         waitEvent.push_back(event);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
-
       } else if (callback->data.compare(0, 14, "screen.select ") == 0 ||
                  callback->data.compare(0, 22, "screen.select.refresh ") == 0) {
         std::vector<std::string> callbackData, images;
@@ -322,6 +321,47 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         }
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, response);
+      } else if (callback->data == "problems") {
+        TgBot::InlineKeyboardMarkup::Ptr problemMenu =
+            zworker::createMenu(zworker::Menu::PROBLEMS, zabbix);
+        bot.getApi().editMessageText("*Problems:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, problemMenu);
+      } else if (callback->data.compare(0, 24, "problems.select.grp.page") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr problemMenu =
+            zworker::createMenu(zworker::Menu::PROBLEMS, zabbix, std::stoi(callbackData[1]));
+        bot.getApi().editMessageText("*Problems:*", callback->message->chat->id,
+                                     callback->message->messageId, callback->inlineMessageId,
+                                     "Markdown", false, problemMenu);
+      } else if (callback->data.compare(0, 20, "problems.select.grp ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr problemMenu = zworker::createMenu(
+            zworker::Menu::PROBLEMSSELECTHOSTGRP, zabbix, 0, "", callbackData[1]);
+        bot.getApi().editMessageText("*Problems/" + zabbix.getHostGrpName(callbackData[1]) + ":*",
+                                     callback->message->chat->id, callback->message->messageId,
+                                     callback->inlineMessageId, "Markdown", false, problemMenu);
+      } else if (callback->data.compare(0, 21, "problems.select.page ") == 0) {
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        TgBot::InlineKeyboardMarkup::Ptr problemMenu =
+            zworker::createMenu(zworker::Menu::PROBLEMSSELECTHOSTGRP, zabbix,
+                                std::stoi(callbackData[2]), "", callbackData[1]);
+        bot.getApi().editMessageText("*Problems/" + zabbix.getHostGrpName(callbackData[1]) + ":*",
+                                     callback->message->chat->id, callback->message->messageId,
+                                     callback->inlineMessageId, "Markdown", false, problemMenu);
+      } else if (callback->data.compare(0, 16, "problems.select ") == 0) {
+        zEvent event;
+        std::vector<std::string> callbackData;
+        boost::split(callbackData, callback->data, boost::is_any_of(" "));
+        event.chat     = callback->message->chat->id;
+        event.from     = callback->from->username;
+        event.callback = callbackData;
+        waitEvent.push_back(event);
+        bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
+        bot.getApi().sendMessage(callback->message->chat->id, "Input acknowledge text:");
       }
       if (notify) {
         for (std::string s : configBot.notifyChats) {
@@ -346,6 +386,16 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
               std::string response = "✅ Maintenance period successful created.";
               try {
                 zabbix.createMaintenance(it->callback[1], message->text);
+              } catch (ZZabbixException& e) {
+                response = "⚠️ ERROR: " + std::string(e.getError());
+              }
+              bot.getApi().sendMessage(message->chat->id, response);
+              it = waitEvent.erase(it);
+              if (it == waitEvent.end()) break;
+            } else if (it->callback[0] == "problems.select") {
+              std::string response = "✅ Problem was acknowledge.";
+              try {
+                zabbix.ackProblem(zabbix.getEvent(it->callback[1]), message->text);
               } catch (ZZabbixException& e) {
                 response = "⚠️ ERROR: " + std::string(e.getError());
               }
@@ -512,8 +562,12 @@ std::vector<TgBot::InlineKeyboardButton::Ptr> zworker::createPaginator(int curr,
 
 void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callbackName,
                       ZZabbix* zabbix, std::vector<std::pair<std::string, std::string>> data,
-                      int page, int lineperpage) {
+                      int page, std::string pageCallback, int lineperpage) {
   if (data.size() > lineperpage) {
+    std::string pageCallbackData = callbackName + ".page";
+    if (pageCallback.size() != 0) {
+      pageCallbackData += " " + pageCallback;
+    }
     for (int c = 0; c < lineperpage; ++c) {
       auto button(std::make_shared<TgBot::InlineKeyboardButton>());
       std::vector<TgBot::InlineKeyboardButton::Ptr> row;
@@ -529,7 +583,7 @@ void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callb
       markup->inlineKeyboard.push_back(row);
     }
     markup->inlineKeyboard.push_back(
-        createPaginator(page, std::ceil(data.size() / float(lineperpage)), callbackName + ".page"));
+        createPaginator(page, std::ceil(data.size() / float(lineperpage)), pageCallbackData));
   } else {
     for (std::pair<std::string, std::string> d : data) {
       auto button(std::make_shared<TgBot::InlineKeyboardButton>());
@@ -545,7 +599,7 @@ void zworker::addList(TgBot::InlineKeyboardMarkup::Ptr markup, std::string callb
 }
 
 TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix& zabbix, int page,
-                                                     std::string callback, std::string chatid) {
+                                                     std::string callback, std::string arg) {
 
   switch (menu) {
   case zworker::Menu::MAIN: {
@@ -554,8 +608,10 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     auto maintenance(std::make_shared<TgBot::InlineKeyboardButton>());
     auto actions(std::make_shared<TgBot::InlineKeyboardButton>());
     auto screen(std::make_shared<TgBot::InlineKeyboardButton>());
+    auto problems(std::make_shared<TgBot::InlineKeyboardButton>());
     std::vector<TgBot::InlineKeyboardButton::Ptr> mainrow1;
     std::vector<TgBot::InlineKeyboardButton::Ptr> mainrow2;
+    std::vector<TgBot::InlineKeyboardButton::Ptr> mainrow3;
 
     info->text                = "Info";
     info->callbackData        = "info";
@@ -565,13 +621,17 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     actions->callbackData     = "actions";
     screen->text              = "Screen";
     screen->callbackData      = "screen";
+    problems->text            = "Problems";
+    problems->callbackData    = "problems";
 
     mainrow1.push_back(info);
     mainrow1.push_back(maintenance);
     mainrow2.push_back(actions);
     mainrow2.push_back(screen);
+    mainrow3.push_back(problems);
     mainMenu->inlineKeyboard.push_back(mainrow1);
     mainMenu->inlineKeyboard.push_back(mainrow2);
+    mainMenu->inlineKeyboard.push_back(mainrow3);
     return mainMenu;
   }
   case zworker::Menu::INFO: {
@@ -618,7 +678,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     struct stat stall;
     struct stat stchat;
     std::string triggerFileForAll  = storagePath + "/sending_off";
-    std::string triggerFileForChat = storagePath + "/pending/" + chatid + "/sending_off";
+    std::string triggerFileForChat = storagePath + "/pending/" + arg + "/sending_off";
     stat(triggerFileForAll.c_str(), &stall);
     stat(triggerFileForChat.c_str(), &stchat);
 
@@ -735,8 +795,37 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
   case zworker::Menu::MAINTENANCESELECTHOSTGRP: {
     auto maintenanceMenuSelectHostGrp(std::make_shared<TgBot::InlineKeyboardMarkup>());
     zworker::addList(maintenanceMenuSelectHostGrp, "maintenance.create.select.grp", &zabbix,
-                     &ZZabbix::getHostGrp, page);
+                     &ZZabbix::getHostGrp, 0, page);
     return maintenanceMenuSelectHostGrp;
+  }
+  case zworker::Menu::PROBLEMS: {
+    auto problemsMenu(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto backButton(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> problemsrow1;
+
+    zworker::addList(problemsMenu, "problems.select.grp", &zabbix, &ZZabbix::getHostGrp, 1, page);
+
+    backButton->text         = "Back";
+    backButton->callbackData = "main";
+
+    problemsrow1.push_back(backButton);
+    problemsMenu->inlineKeyboard.push_back(problemsrow1);
+    return problemsMenu;
+  }
+  case zworker::Menu::PROBLEMSSELECTHOSTGRP: {
+    auto problemsMenuSelectHostGrp(std::make_shared<TgBot::InlineKeyboardMarkup>());
+    auto backButton(std::make_shared<TgBot::InlineKeyboardButton>());
+    std::vector<TgBot::InlineKeyboardButton::Ptr> problemsrow1;
+
+    zworker::addList(problemsMenuSelectHostGrp, "problems.select", &zabbix, &ZZabbix::getProblems,
+                     std::stoi(arg), page, arg);
+
+    backButton->text         = "Back";
+    backButton->callbackData = "problems";
+
+    problemsrow1.push_back(backButton);
+    problemsMenuSelectHostGrp->inlineKeyboard.push_back(problemsrow1);
+    return problemsMenuSelectHostGrp;
   }
   default:
     break;
