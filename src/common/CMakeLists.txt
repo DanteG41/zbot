@@ -3,10 +3,12 @@ project(zbot)
 set(SOURCES hirschberg.cpp
 	zconfig.cpp
 	zinit.cpp
+	zworker.cpp
 	zlogger.cpp
 	zmsgbox.cpp
 	zstorage.cpp
 	ztbot.cpp
+	zzabbix.cpp
 	defaultconfig.cpp)
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})

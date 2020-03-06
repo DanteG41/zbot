@@ -16,6 +16,7 @@ public:
   void getParam(const char* name, int&);
   void getParam(const char* name, std::string&);
   void getParam(const char* name, float& val);
+  void getParam(const char* name, bool&);
 };
 
 class ZConfigException {

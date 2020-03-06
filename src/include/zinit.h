@@ -3,11 +3,11 @@
 
 #include <defaultconfig.h>
 #include <iostream>
-#include <signal.h>
-#include <unistd.h>
+#include <set>
 #include <zconfig.h>
 #include <zlogger.h>
 #include <zmsgbox.h>
+#include <ztbot.h>
 
 namespace zbot {
 extern ZLogger log;
@@ -16,21 +16,22 @@ extern char** progName;
 extern int argc;
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
 struct config {
-  std::string path, token;
-  int maxmessages, minapprox, wait;
+  std::set<std::string> adminUsers, notifyChats;
+  std::string path, token, webhookPublicHost, webhookPath;
+  std::string zabbixUrl, zabbixUser, zabbixPassword;
+  int maxmessages, minapprox, wait, webhookBindPort;
   float accuracy, spread;
+  bool webhook;
 };
 
 void init();
 int zfork();
 int zmonitor();
-int workerBot();
-int workerSender();
 int zwait(int& pid, int& start, siginfo_t& siginfo);
-int startWorker(int& pid, int& status, int& start, int (*func)());
+int startWorker(int& pid, int& status, int& start,
+                int (*func)(sigset_t& sigset, siginfo_t& siginfo));
 void setPidFile(std::string& f);
 void setProcName(const char* procname);
-void senderGetParams(ZConfig& zc, config& c);
 void signal_error(int sig, siginfo_t* si, void* ptr);
 } // namespace zbot
 #endif // ZINIT_H

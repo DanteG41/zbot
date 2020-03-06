@@ -16,8 +16,13 @@ protected:
   ZStorage() {};
   void checkDir();
   std::string path_;
+  bool status = true;
 
 public:
+  bool checkTrigger();
+  inline bool getStatus() { return status; };
+  inline void disable() { status = false; };
+  inline void enable() { status = true; };
   std::string getPath() { return path_; };
   std::vector<std::string> listChats();
   ZStorage(std::string c) : path_(c) { checkDir(); };
