@@ -5,7 +5,7 @@ void ZConfig::load(const char* sectionName, std::map<std::string, std::string>& 
   params_ = p;
   CSimpleIniA ini_file;
   ini_file.SetUnicode();
-  ini_file.LoadFile(configFile);
+  ini_file.LoadFile(configFile.c_str());
   for (std::pair<const std::string, std::string>& s : params_) {
     s.second = ini_file.GetValue(sectionName, s.first.c_str(), s.second.c_str());
   }

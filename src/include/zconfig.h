@@ -6,10 +6,11 @@ private:
   std::map<std::string, std::string> params_;
 
 public:
-  const char* configFile = "/etc/zbot/zbot.ini";
+  std::string configFile = "/etc/zbot/zbot.ini";
 
   ZConfig(){};
   ZConfig(const char* c) : configFile(c){};
+  ZConfig(std::string s) : configFile(s){};
 
   void load(std::map<std::string, std::string>& p);
   void load(const char* sectionName, std::map<std::string, std::string>& p);

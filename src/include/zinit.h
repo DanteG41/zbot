@@ -13,7 +13,7 @@ namespace zbot {
 extern ZLogger log;
 extern ZConfig mainConfig;
 extern char** progName;
-extern int argc;
+extern int argc, fd[2];
 enum ChildSignal { CHILD_TERMINATE = 80, CHILD_RESTART };
 struct config {
   std::set<std::string> adminUsers, notifyChats;

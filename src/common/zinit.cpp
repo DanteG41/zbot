@@ -11,6 +11,7 @@ ZLogger log;
 ZConfig mainConfig;
 char** progName;
 int argc;
+int fd[2];
 } // namespace zbot
 
 void zbot::init() {
@@ -55,7 +56,25 @@ void zbot::setProcName(const char* procname) {
 int zbot::startWorker(int& pid, int& status, int& start,
                       int (*func)(sigset_t& sigset, siginfo_t& siginfo)) {
   if (start) {
+    pipe(fd);
     pid = fork();
+    if (pid > 0) {
+      close(fd[0]);
+      write(fd[1], mainConfig.configFile.c_str(), strlen(mainConfig.configFile.c_str()) + 1);
+      close(fd[1]);
+    } else if (pid == 0) {
+      close(fd[1]);
+      char ch;
+      std::string buff;
+      while (read(fd[0], &ch, sizeof(ch)) > 0) {
+        if (ch != 0)
+          buff.push_back(ch);
+        else {
+          mainConfig.configFile = buff;
+        }
+      }
+      close(fd[0]);
+    }
   }
 
   start = 0;
@@ -179,6 +198,8 @@ int zbot::zmonitor() {
 
 int zbot::zfork() {
   int status, pid;
+  pipe(zbot::fd);
+
   pid = fork();
 
   if (pid < 0) {
@@ -186,6 +207,9 @@ int zbot::zfork() {
     return EXIT_FAILURE;
   }
   if (pid > 0) {
+    close(fd[0]);
+    write(fd[1], mainConfig.configFile.c_str(), strlen(mainConfig.configFile.c_str()) + 1);
+    close(fd[1]);
     exit(EXIT_SUCCESS);
   }
   umask(0);
@@ -194,6 +218,17 @@ int zbot::zfork() {
   close(STDIN_FILENO);
   close(STDOUT_FILENO);
   close(STDERR_FILENO);
+  close(fd[1]);
+  char ch;
+  std::string buff;
+  while (read(fd[0], &ch, sizeof(ch)) > 0) {
+    if (ch != 0)
+      buff.push_back(ch);
+    else {
+      mainConfig.configFile = buff;
+    }
+  }
+  close(fd[0]);
   status = zbot::zmonitor();
   return status;
 };
