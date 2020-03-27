@@ -447,6 +447,8 @@ std::string ZZabbix::getEvent(std::string id) {
   params.push_back(std::make_pair("", paramsChild));
   request.put("method", "event.get");
   request.put("params.objectids", id);
+  request.put("params.sortfield", "clock");
+  request.put("params.sortorder", "DESC");
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
