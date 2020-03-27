@@ -1,4 +1,13 @@
-# [0.3.0](https://github.com/DanteG41/zbot/compare/v0.2.2...v) (2020-03-06)
+# [0.3.2](https://github.com/DanteG41/zbot/compare/v0.3.0...v) (2020-03-27)
+
+
+### Bug Fixes
+
+* child get configuration file from parent proc ([440027e](https://github.com/DanteG41/zbot/commit/440027e98d55a025ec85488feb13169668984106))
+* **zzabbix:** getevent sort new first ([53000e6](https://github.com/DanteG41/zbot/commit/53000e61efd3f70ef00b39605b085fb29523b89b))
+
+
+# [0.3.0](https://github.com/DanteG41/zbot/compare/v0.2.2...v0.3.0) (2020-03-06)
 
 
 ### Bug Fixes
