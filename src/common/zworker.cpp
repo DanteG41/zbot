@@ -426,6 +426,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         std::string err = "TgBot exception: ";
         err += e.what();
         zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      } catch (std::exception& e) {
+        std::string err = "WebhookServer exception: ";
+        err += e.what();
+        zbot::log.write(ZLogger::LogLevel::ERROR, err);
       }
     }
   }
@@ -463,6 +467,11 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       }
     } catch (TgBot::TgException& e) {
       std::string err = "TgBot exception: ";
+      err += e.what();
+      zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      continue;
+    } catch (std::exception& e) {
+      std::string err = "LongPoll exception: ";
       err += e.what();
       zbot::log.write(ZLogger::LogLevel::ERROR, err);
       continue;
@@ -890,8 +899,16 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
           messages = sendBox.popMessages();
         }
         if (sendBox.getStatus()) {
-          for (std::string msg : messages) {
-            tbot.send(atoll(chat.c_str()), msg);
+          try {
+            for (std::string msg : messages) {
+              tbot.send(atoll(chat.c_str()), msg);
+            }
+          } catch (std::exception& e) {
+            std::string err = "Sender exception: ";
+            err += e.what();
+            zbot::log.write(ZLogger::LogLevel::ERROR, err);
+            sendBox.move(pendingStorage);
+            continue;
           }
         }
         sendBox.erase();
