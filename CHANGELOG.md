@@ -1,4 +1,13 @@
-# [0.3.3](https://github.com/DanteG41/zbot/compare/v0.3.2...v) (2020-04-13)
+## [0.3.4](https://github.com/DanteG41/zbot/compare/v0.3.3...v0.3.4) (2020-04-13)
+
+
+### Bug Fixes
+
+* **sender:** corruption unicode when more than one octet ([9b0accb](https://github.com/DanteG41/zbot/commit/9b0accb3722614cd24de64a3092c51b7c8947955))
+
+
+
+## [0.3.3](https://github.com/DanteG41/zbot/compare/v0.3.2...v0.3.3) (2020-04-13)
 
 
 ### Bug Fixes
@@ -14,6 +23,10 @@
 
 * child get configuration file from parent proc ([440027e](https://github.com/DanteG41/zbot/commit/440027e98d55a025ec85488feb13169668984106))
 * **zzabbix:** getevent sort new first ([53000e6](https://github.com/DanteG41/zbot/commit/53000e61efd3f70ef00b39605b085fb29523b89b))
+
+
+
+## [0.3.1](https://github.com/DanteG41/zbot/compare/v0.3.0...v0.3.1) (2020-03-06)
 
 
 
