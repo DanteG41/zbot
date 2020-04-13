@@ -231,19 +231,72 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
       prevPattern       = mostCommonPattern;
       mostCommonPattern.erase();
       for (int i = 0; i < editingOperations.size(); i++) {
-        switch (editingOperations[i]) {
-        case '-':
-        case '!':
-          mostCommonPattern.push_back('?');
-          si++;
-          break;
-        case '=':
-          mostCommonPattern.push_back(prevPattern[si]);
-          si++;
-          break;
-        default:
-          mostCommonPattern.push_back('?');
-          break;
+        if ((prevPattern[si] & 0x80) == 0) { // lead bit is zero, must be a single ascii
+          switch (editingOperations[i]) {
+          case '-':
+          case '!':
+            mostCommonPattern.push_back('?');
+            si++;
+            break;
+          case '=':
+            mostCommonPattern.push_back(prevPattern[si]);
+            si++;
+            break;
+          default:
+            mostCommonPattern.push_back('?');
+            break;
+          }
+        } else if ((prevPattern[si] & 0xE0) == 0xC0) { // 110x xxxx 2 octets
+          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=') {
+            mostCommonPattern.push_back(prevPattern[si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            si++;
+            i++;
+          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!') {
+            mostCommonPattern.append("? ");
+            si += 2;
+            i++;
+          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+') {
+            mostCommonPattern.append("? ");
+            i++;
+          }
+        } else if ((prevPattern[si] & 0xF0) == 0xE0) { // 1110 xxxx 3 octets
+          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=' &&
+              editingOperations[i + 2] == '=') {
+            mostCommonPattern.push_back(prevPattern[si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            si++;
+            i += 2;
+          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!' ||
+                     editingOperations[i + 2] == '!') {
+            mostCommonPattern.append("?  ");
+            si += 3;
+            i += 2;
+          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
+                     editingOperations[i + 2] == '+') {
+            mostCommonPattern.append("?  ");
+            i += 2;
+          }
+        } else if ((prevPattern[si] & 0xF8) == 0xF0) { // 1111 0xxx 4 octets
+          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=' &&
+              editingOperations[i + 2] == '=' && editingOperations[i + 3] == '=') {
+            mostCommonPattern.push_back(prevPattern[si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            mostCommonPattern.push_back(prevPattern[++si]);
+            si++;
+            i += 3;
+          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!' ||
+                     editingOperations[i + 2] == '!' || editingOperations[i + 3] == '!') {
+            mostCommonPattern.append("?   ");
+            si += 4;
+            i += 3;
+          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
+                     editingOperations[i + 2] == '+' || editingOperations[i + 3] == '+') {
+            mostCommonPattern.append("?   ");
+            i += 3;
+          }
         }
       }
     }
