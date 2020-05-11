@@ -1,3 +1,12 @@
+# [0.3.5](https://github.com/DanteG41/zbot/compare/v0.3.4...v) (2020-05-11)
+
+
+### Bug Fixes
+
+* **sender:** infinite iterator in a function approximation ([44818b5](https://github.com/DanteG41/zbot/commit/44818b57ca44f309fb8a6cbfb2daae89ca649dc4))
+
+
+
 ## [0.3.4](https://github.com/DanteG41/zbot/compare/v0.3.3...v0.3.4) (2020-04-13)
 
 
