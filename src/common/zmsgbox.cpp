@@ -185,7 +185,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
           kval   = &itk->second;
           itv    = similarmessages.erase(itv);
           remove = true;
-          similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(skey, *kval));
+          itv    = similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(skey, *kval));
         } else {
           itv = similarmessages.erase(itv);
           if (itv == similarmessages.end()) break;
