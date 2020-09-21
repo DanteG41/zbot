@@ -1,4 +1,18 @@
-# [0.3.5](https://github.com/DanteG41/zbot/compare/v0.3.4...v) (2020-05-11)
+# [0.4.0](https://github.com/DanteG41/zbot/compare/v0.3.5...v0.4.0) (2020-09-21)
+
+
+### Bug Fixes
+
+* **approximation:** rare crash when equal pair in group ([a2ab6e3](https://github.com/DanteG41/zbot/commit/a2ab6e327adec869fa5387ca2c471ae25c79c65d))
+
+
+### Features
+
+* **dont_approximate_multibyte:** option not to approximate strings if they differ in multibyte characters ([edc9018](https://github.com/DanteG41/zbot/commit/edc90187e6354701dd1a5fba00bff88330c826d1))
+
+
+
+## [0.3.5](https://github.com/DanteG41/zbot/compare/v0.3.4...v0.3.5) (2020-05-11)
 
 
 ### Bug Fixes
