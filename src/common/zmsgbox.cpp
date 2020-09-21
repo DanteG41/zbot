@@ -178,7 +178,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
     for (std::multimap<std::string*, ZMsgBox::similar>::iterator itv = similarmessages.begin();
          itv != similarmessages.end(); itv++) {
       if (itv->second.storage == itk->first) {
-        if (itv->second.distance - itk->second.distance < spread) {
+        if (itv->second.distance - itk->second.distance < spread && itv->first != itk->second.storage) {
           std::string* skey;
           ZMsgBox::similar* kval;
           skey   = itv->first;
