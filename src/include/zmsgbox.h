@@ -18,7 +18,7 @@ private:
 
 public:
   ZMsgBox(ZStorage& s, const char* c);
-  std::vector<std::string> approximation(float accuracy, float spread);
+  std::vector<std::string> approximation(float accuracy, float spread, bool dont_approximate_multibyte);
   std::vector<std::string> popMessages();
   void pushMessage(const char* c);
   void pushMessage(std::string s);

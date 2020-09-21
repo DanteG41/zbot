@@ -124,7 +124,8 @@ std::string levensteinOps(std::string& s, std::string& t) {
   return editOperations;
 }
 
-std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
+std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
+                                                bool dont_approximate_multibyte) {
   std::multimap<std::string*, ZMsgBox::similar> similarmessages;
   std::pair<std::multimap<std::string*, ZMsgBox::similar>::iterator,
             std::multimap<std::string*, ZMsgBox::similar>::iterator>
@@ -165,7 +166,30 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
             insert = true;
           }
           if (insert and !find)
-            similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
+            if (dont_approximate_multibyte) {
+              std::string editingOperations;
+              editingOperations        = levensteinOps(k, v);
+              int si                   = 0;
+              bool unchanged_multibyte = true;
+              for (int i = 0; i < editingOperations.size(); i++) {
+                switch (editingOperations[i]) {
+                case '-':
+                case '!':
+                  if ((k[si] & 0x80) != 0) unchanged_multibyte = false;
+                  si++;
+                  break;
+                case '=':
+                  si++;
+                  break;
+                case '+':
+                  break;
+                }
+              }
+              if (unchanged_multibyte) {
+                similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
+              }
+            } else
+              similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
         }
       }
     }
@@ -178,7 +202,8 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread) {
     for (std::multimap<std::string*, ZMsgBox::similar>::iterator itv = similarmessages.begin();
          itv != similarmessages.end(); itv++) {
       if (itv->second.storage == itk->first) {
-        if (itv->second.distance - itk->second.distance < spread && itv->first != itk->second.storage) {
+        if (itv->second.distance - itk->second.distance < spread &&
+            itv->first != itk->second.storage) {
           std::string* skey;
           ZMsgBox::similar* kval;
           skey   = itv->first;

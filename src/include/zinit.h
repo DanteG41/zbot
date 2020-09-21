@@ -21,7 +21,7 @@ struct config {
   std::string zabbixUrl, zabbixUser, zabbixPassword;
   int maxmessages, minapprox, wait, webhookBindPort;
   float accuracy, spread;
-  bool webhook;
+  bool webhook, dont_approximate_multibyte;
 };
 
 void init();

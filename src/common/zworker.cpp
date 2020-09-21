@@ -850,6 +850,7 @@ void zworker::senderGetParams(ZConfig& tc, zbot::config& c) {
     zbot::mainConfig.getParam("accuracy", c.accuracy);
     zbot::mainConfig.getParam("spread", c.spread);
     zbot::mainConfig.getParam("wait", c.wait);
+    zbot::mainConfig.getParam("dont_approximate_multibyte", c.dont_approximate_multibyte);
   } catch (ZConfigException& e) {
     zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());
   }
@@ -894,7 +895,7 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
         sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
         if (sendBox.size() > configSender.minapprox) {
-          messages = sendBox.approximation(configSender.accuracy, configSender.spread);
+          messages = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
         } else {
           messages = sendBox.popMessages();
         }
