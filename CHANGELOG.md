@@ -1,3 +1,12 @@
+## [0.4.1](https://github.com/DanteG41/zbot/compare/v0.4.0...v0.4.1) (2020-09-22)
+
+
+### Performance Improvements
+
+* **dont_approximate_multibyte:** improved checking of multibyte characters ([a2cc8b9](https://github.com/DanteG41/zbot/commit/a2cc8b914ce074d39fd042ab5afd6a214a14e6d9))
+
+
+
 # [0.4.0](https://github.com/DanteG41/zbot/compare/v0.3.5...v0.4.0) (2020-09-21)
 
 
