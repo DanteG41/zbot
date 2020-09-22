@@ -184,6 +184,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
                 case '+':
                   break;
                 }
+                if (!unchanged_multibyte || si == k.size()) break;
               }
               if (unchanged_multibyte) {
                 similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
