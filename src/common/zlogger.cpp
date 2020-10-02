@@ -27,8 +27,9 @@ std::string ZLogger::formatting(LogLevel l, const char* c) {
   std::string r, level;
   char timedate[100];
   time_t now = time(0);
-  struct tm* p = localtime(&now);
-  strftime(timedate, 100, "%b %d %T", p);
+  struct tm p;
+  localtime_r(&now, &p);
+  strftime(timedate, 100, "%b %d %T", &p);
 
   switch (l) {
   case LogLevel::WARNING: {
