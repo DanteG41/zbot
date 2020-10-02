@@ -54,7 +54,7 @@ jobs:
         # Prefix the list here with "+" to use these queries and those in the config file.
         # queries: ./path/to/local/query, your-org/your-repo/queries@main
     - name: Install packages
-      run: sudo apt -y install libboost1.69-dev
+      run: sudo apt -y install libboost1.65-dev
       
       
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
