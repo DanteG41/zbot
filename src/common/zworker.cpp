@@ -371,11 +371,21 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     }
   });
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
-    if (configBot.adminUsers.count(message->from->username)) {
-      bot.getApi().sendMessage(message->chat->id, "*Selecting an action:*", false, 0, mainMenu,
-                               "MarkDown");
-    } else {
-      bot.getApi().sendMessage(message->chat->id, "Access denied");
+    std::string botname = "@" + bot.getApi().getMe()->username;
+    bool access         = false;
+    if (message->text.size() > 6) {
+      if (message->text.compare(message->text.size() - botname.size(), botname.size(), botname) ==
+          0)
+        access = true;
+    } else
+      access = true;
+    if (access) {
+      if (configBot.adminUsers.count(message->from->username)) {
+        bot.getApi().sendMessage(message->chat->id, "*Selecting an action:*", false, 0, mainMenu,
+                                 "MarkDown");
+      } else {
+        bot.getApi().sendMessage(message->chat->id, "Access denied");
+      }
     }
   });
   bot.getEvents().onNonCommandMessage(
