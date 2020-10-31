@@ -1,3 +1,12 @@
+## [0.5.1](https://github.com/DanteG41/zbot/compare/v0.5.0...v0.5.1) (2020-10-31)
+
+
+### Bug Fixes
+
+* **bot:** out of bounds message-> text ([ddfe584](https://github.com/DanteG41/zbot/commit/ddfe5845ed70b126308aa71f51b9a05722a3022e))
+
+
+
 # [0.5.0](https://github.com/DanteG41/zbot/compare/v0.4.1...v0.5.0) (2020-10-31)
 
 
