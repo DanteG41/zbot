@@ -1,3 +1,20 @@
+# [0.5.0](https://github.com/DanteG41/zbot/compare/v0.4.1...v0.5.0) (2020-10-31)
+
+
+### Features
+
+* **bot:** resp. only to start command sent to it ([f3f6b5c](https://github.com/DanteG41/zbot/commit/f3f6b5c890fd4ca1e36aef815d37bd3af7dc5ca3))
+* **bot:** zabbix 4.0 support ([83fadd8](https://github.com/DanteG41/zbot/commit/83fadd8d77bcfb9d651266a159787eee674ac46d))
+* **zzabbix:** add getApiVersion() ([7c7ba58](https://github.com/DanteG41/zbot/commit/7c7ba58501bc778da60f11122a5c84cf99f02e16))
+
+
+### Performance Improvements
+
+* **getApiVersion:** improved work with buf ([a24fb73](https://github.com/DanteG41/zbot/commit/a24fb731a0729339f8152edfe6b4f5c32897dfc9))
+* **logger:** CWE-676 replace with localtime_r ([241bcd2](https://github.com/DanteG41/zbot/commit/241bcd2e9466158df59b15829eb764602adb6de5))
+
+
+
 ## [0.4.1](https://github.com/DanteG41/zbot/compare/v0.4.0...v0.4.1) (2020-09-22)
 
 
