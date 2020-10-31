@@ -373,9 +373,22 @@ void ZZabbix::ackProblem(std::string id, std::string message) {
   ptree groupids, timeperiods;
   ptree groupidChild, timeperiodChild;
 
-  request.put("method", "event.acknowledge");
-  request.put("params.eventids", id);
-  request.put("params.message", message);
+  if (int(apiversion_[1]) >= 4) {
+    /*  "params.action" is bitmask field, any combination of values is acceptable
+        Possible values:
+        1 - close problem;
+        2 - acknowledge event;
+        4 - add message;
+        8 - change severity. */
+    request.put("method", "event.acknowledge");
+    request.put("params.action", 6);
+    request.put("params.eventids", id);
+    request.put("params.message", message);
+  } else {
+    request.put("method", "event.acknowledge");
+    request.put("params.eventids", id);
+    request.put("params.message", message);
+  }
 
   response        = ZZabbix::parseJson(sendRequest(request));
   std::string err = response.get<std::string>("error.data", "");
