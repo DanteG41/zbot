@@ -373,11 +373,11 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
     std::string botname = "@" + bot.getApi().getMe()->username;
     bool access         = false;
-    if (message->text.size() > 6) {
+    if (message->text.size() == 6 + botname.size()) {
       if (message->text.compare(message->text.size() - botname.size(), botname.size(), botname) ==
           0)
         access = true;
-    } else
+    } else if (message->text.size() == 6)
       access = true;
     if (access) {
       if (configBot.adminUsers.count(message->from->username)) {
