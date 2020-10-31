@@ -193,9 +193,6 @@ void ZZabbix::getApiVersion() {
   write_json(buf, payload, false);
   sbuf = buf.str();
   boost::replace_all(sbuf, "[\"\"]", "[]");
-  buf.str(std::string());
-  buf.clear();
-  buf.write(sbuf.c_str(), sbuf.size());
 
   tcp::resolver resolver(ioService_);
   tcp::resolver::query query(zabbixjsonrpc_.host, "443");
@@ -209,7 +206,7 @@ void ZZabbix::getApiVersion() {
   socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
   socket.handshake(ssl::stream<tcp::socket>::client);
 
-  std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
+  std::string request = generateRequest(zabbixjsonrpc_, sbuf, "application/json-rpc", false);
   write(socket, buffer(request.c_str(), request.length()));
 
   std::string response;
