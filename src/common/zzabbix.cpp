@@ -1,3 +1,4 @@
+#include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <iostream>
@@ -129,6 +130,7 @@ bool ZZabbix::auth() {
   authToken_ = response.get<std::string>("result");
 
   getSession();
+  getApiVersion();
 
   return true;
 }
@@ -171,6 +173,53 @@ void ZZabbix::getSession() {
   } else {
     throw ZZabbixException("unable to log in zabbix");
   }
+}
+
+void ZZabbix::getApiVersion() {
+  ptree payload, params, child;
+  std::ostringstream buf;
+  std::string sbuf;
+
+  params.push_back(std::make_pair("", child));
+  payload.put("method", "apiinfo.version");
+  payload.add_child("params", params);
+
+  // whole function is a dirty hack, because boost::property_tree::json_parser
+  // cannot create an empty json array like {"params": []}
+
+  id_++;
+  payload.put("jsonrpc", "2.0");
+  payload.put("id", id_);
+  write_json(buf, payload, false);
+  sbuf = buf.str();
+  boost::replace_all(sbuf, "[\"\"]", "[]");
+  buf.str(std::string());
+  buf.clear();
+  buf.write(sbuf.c_str(), sbuf.size());
+
+  tcp::resolver resolver(ioService_);
+  tcp::resolver::query query(zabbixjsonrpc_.host, "443");
+  ssl::context context(ssl::context::tlsv12_client);
+  context.set_default_verify_paths();
+  ssl::stream<tcp::socket> socket(ioService_, context);
+  connect(socket.lowest_layer(), resolver.resolve(query));
+  socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
+  socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
+  socket.set_verify_mode(ssl::verify_none);
+  socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
+  socket.handshake(ssl::stream<tcp::socket>::client);
+
+  std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
+  write(socket, buffer(request.c_str(), request.length()));
+
+  std::string response;
+  char buff[65536];
+  boost::system::error_code error;
+  while (!error) {
+    size_t bytes = read(socket, buffer(buff), error);
+    response += std::string(buff, bytes);
+  }
+  apiversion_ = ZZabbix::parseJson(ZZabbix::extractBody(response)).get<std::string>("result");
 }
 
 std::vector<std::string> ZZabbix::downloadGraphs(std::vector<std::string> ids) {

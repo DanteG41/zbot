@@ -10,12 +10,14 @@ private:
   const char *user_, *password_, *server_;
   std::string authToken_;
   std::string zbxSessionid_;
+  std::string apiversion_;
   TgBot::Url zabbixjsonrpc_;
   TgBot::Url zabbixlogin_;
   TgBot::Url zabbixchart2_;
 
   long id_ = 0;
   void getSession();
+  void getApiVersion();
   std::string sendRequest(boost::property_tree::ptree& pt);
   std::string generateRequest(TgBot::Url& url, const std::string& payload, std::string contentType,
                               bool isKeepAlive,
