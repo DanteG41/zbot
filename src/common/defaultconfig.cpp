@@ -9,7 +9,10 @@ std::map<std::string, std::string> defaultconfig::params       = {{"storage", "/
                                                             {"max_messages", "50"},
                                                             {"min_approx", "5"},
                                                             {"bot_enable", "1"},
-                                                            {"dont_approximate_multibyte", "0"}};
+                                                            {"dont_approximate_multibyte", "0"},
+                                                            {"immediate_send", "1"},
+                                                            {"history_check_count", "20"},
+                                                            {"history_max_age_minutes", "60"}};
 std::map<std::string, std::string> defaultconfig::zabbixParams = {
     {"zabbix_url", "http://company.com/zabbix/"},
     {"user", "zbot"},

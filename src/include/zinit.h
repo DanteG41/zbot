@@ -20,8 +20,9 @@ struct config {
   std::string path, token, webhookPublicHost, webhookPath;
   std::string zabbixUrl, zabbixUser, zabbixPassword;
   int maxmessages, minapprox, wait, webhookBindPort;
+  int historyCheckCount, historyMaxAgeMinutes;
   float accuracy, spread;
-  bool webhook, dont_approximate_multibyte;
+  bool webhook, dont_approximate_multibyte, immediateSend;
 };
 
 void init();

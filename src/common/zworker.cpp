@@ -2,6 +2,8 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <zworker.h>
+#include <zmessagehistory.h>
+#include <zinstantsender.h>
 
 using boost::property_tree::ptree;
 using boost::property_tree::write_json;
@@ -849,6 +851,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
   default:
     break;
   }
+  return nullptr; // Return null pointer for unhandled menu types
 }
 
 void zworker::senderGetParams(ZConfig& tc, zbot::config& c) {
@@ -861,6 +864,9 @@ void zworker::senderGetParams(ZConfig& tc, zbot::config& c) {
     zbot::mainConfig.getParam("spread", c.spread);
     zbot::mainConfig.getParam("wait", c.wait);
     zbot::mainConfig.getParam("dont_approximate_multibyte", c.dont_approximate_multibyte);
+    zbot::mainConfig.getParam("immediate_send", c.immediateSend);
+    zbot::mainConfig.getParam("history_check_count", c.historyCheckCount);
+    zbot::mainConfig.getParam("history_max_age_minutes", c.historyMaxAgeMinutes);
   } catch (ZConfigException& e) {
     zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());
   }
@@ -881,6 +887,12 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
   ZStorage pendingStorage(configSender.path + "/pending");
   ZStorage processingStorage(configSender.path + "/processing");
   Ztbot tbot(configSender.token);
+  
+  // Initialize message history and instant sender for immediate mode
+  ZMessageHistory messageHistory;
+  ZInstantSender instantSender(tbot, messageHistory, configSender.accuracy, configSender.spread,
+                              configSender.dont_approximate_multibyte, configSender.historyCheckCount,
+                              configSender.historyMaxAgeMinutes);
 
   while (true) {
     struct timespec timeout;
@@ -899,20 +911,33 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
       }
     }
     try {
+      // Clean up old messages from history
+      messageHistory.cleanup(configSender.historyMaxAgeMinutes);
+      
       for (std::string chat : pendingStorage.listChats()) {
         ZMsgBox sendBox(pendingStorage, chat.c_str());
         if (!zbotStorage.checkTrigger() || !sendBox.checkTrigger()) sendBox.disable();
         sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
-        if (sendBox.size() > configSender.minapprox) {
-          messages = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
-        } else {
-          messages = sendBox.popMessages();
-        }
+        
         if (sendBox.getStatus()) {
           try {
-            for (std::string msg : messages) {
-              tbot.send(atoll(chat.c_str()), msg);
+            if (configSender.immediateSend) {
+              // New immediate sending mode with dynamic grouping
+              messages = sendBox.popMessages();
+              for (const std::string& msg : messages) {
+                instantSender.sendMessage(atoll(chat.c_str()), msg);
+              }
+            } else {
+              // Legacy batch mode
+              if (sendBox.size() > configSender.minapprox) {
+                messages = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
+              } else {
+                messages = sendBox.popMessages();
+              }
+              for (const std::string& msg : messages) {
+                tbot.send(atoll(chat.c_str()), msg);
+              }
             }
           } catch (std::exception& e) {
             std::string err = "Sender exception: ";

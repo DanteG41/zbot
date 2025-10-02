@@ -452,6 +452,7 @@ std::string ZZabbix::getMaintenanceName(std::string id) {
   for (ptree::value_type const& v : response.get_child("result")) {
     return v.second.get<std::string>("name");
   }
+  return ""; // Return empty string if no results found
 }
 
 std::string ZZabbix::getScreenName(std::string id) {
@@ -467,6 +468,7 @@ std::string ZZabbix::getScreenName(std::string id) {
   for (ptree::value_type const& v : response.get_child("result")) {
     return v.second.get<std::string>("name");
   }
+  return ""; // Return empty string if no results found
 }
 
 std::string ZZabbix::getActionName(std::string id) {
@@ -482,6 +484,7 @@ std::string ZZabbix::getActionName(std::string id) {
   for (ptree::value_type const& v : response.get_child("result")) {
     return v.second.get<std::string>("name");
   }
+  return ""; // Return empty string if no results found
 }
 
 std::string ZZabbix::getHostGrpName(std::string id) {
@@ -497,6 +500,7 @@ std::string ZZabbix::getHostGrpName(std::string id) {
   for (ptree::value_type const& v : response.get_child("result")) {
     return v.second.get<std::string>("name");
   }
+  return ""; // Return empty string if no results found
 }
 
 std::string ZZabbix::getEvent(std::string id) {
@@ -514,6 +518,7 @@ std::string ZZabbix::getEvent(std::string id) {
   for (ptree::value_type const& v : response.get_child("result")) {
     return v.second.get<std::string>("eventid");
   }
+  return ""; // Return empty string if no results found
 }
 
 std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int filter, int limit) {

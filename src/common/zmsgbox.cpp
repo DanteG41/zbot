@@ -256,7 +256,10 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
       editingOperations = levensteinOps(mostCommonPattern, *it->second.storage);
       prevPattern       = mostCommonPattern;
       mostCommonPattern.erase();
+      si = 0; // Reset string index for each iteration
       for (int i = 0; i < editingOperations.size(); i++) {
+        if (si >= prevPattern.size()) break; // Prevent out of bounds access
+        
         if ((prevPattern[si] & 0x80) == 0) { // lead bit is zero, must be a single ascii
           switch (editingOperations[i]) {
           case '-':
@@ -268,8 +271,9 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
             mostCommonPattern.push_back(prevPattern[si]);
             si++;
             break;
-          default:
+          case '+':
             mostCommonPattern.push_back('?');
+            // Don't increment si for insertions
             break;
           }
         } else if ((prevPattern[si] & 0xE0) == 0xC0) { // 110x xxxx 2 octets
@@ -284,6 +288,11 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
             i++;
           } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+') {
             mostCommonPattern.append("? ");
+            // Don't increment si for insertions, only increment i
+            i++;
+          } else if (editingOperations[i] == '-' || editingOperations[i + 1] == '-') {
+            mostCommonPattern.append("? ");
+            si += 2;
             i++;
           }
         } else if ((prevPattern[si] & 0xF0) == 0xE0) { // 1110 xxxx 3 octets
@@ -302,6 +311,12 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
           } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
                      editingOperations[i + 2] == '+') {
             mostCommonPattern.append("?  ");
+            // Don't increment si for insertions
+            i += 2;
+          } else if (editingOperations[i] == '-' || editingOperations[i + 1] == '-' ||
+                     editingOperations[i + 2] == '-') {
+            mostCommonPattern.append("?  ");
+            si += 3;
             i += 2;
           }
         } else if ((prevPattern[si] & 0xF8) == 0xF0) { // 1111 0xxx 4 octets
@@ -321,6 +336,12 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
           } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
                      editingOperations[i + 2] == '+' || editingOperations[i + 3] == '+') {
             mostCommonPattern.append("?   ");
+            // Don't increment si for insertions
+            i += 3;
+          } else if (editingOperations[i] == '-' || editingOperations[i + 1] == '-' ||
+                     editingOperations[i + 2] == '-' || editingOperations[i + 3] == '-') {
+            mostCommonPattern.append("?   ");
+            si += 4;
             i += 3;
           }
         }
