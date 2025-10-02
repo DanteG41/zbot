@@ -22,6 +22,10 @@ struct config {
   int maxmessages, minapprox, wait, webhookBindPort;
   float accuracy, spread;
   bool webhook, dont_approximate_multibyte;
+  // Immediate send
+  bool immediateSend;
+  int historyCheckCount;
+  int historyMaxAgeMinutes;
 };
 
 void init();

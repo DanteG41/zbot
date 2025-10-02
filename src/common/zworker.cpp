@@ -2,6 +2,14 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <zworker.h>
+#include <zmessagehistory.h>
+#include <string>
+#include <algorithm>
+#include <cctype>
+
+// Forward declaration from zmsgbox.cpp
+float levensteinDistance(std::string& s, std::string& t);
+std::string levensteinOps(std::string& s, std::string& t);
 
 using boost::property_tree::ptree;
 using boost::property_tree::write_json;
@@ -861,6 +869,9 @@ void zworker::senderGetParams(ZConfig& tc, zbot::config& c) {
     zbot::mainConfig.getParam("spread", c.spread);
     zbot::mainConfig.getParam("wait", c.wait);
     zbot::mainConfig.getParam("dont_approximate_multibyte", c.dont_approximate_multibyte);
+    zbot::mainConfig.getParam("immediate_send", c.immediateSend);
+    zbot::mainConfig.getParam("history_check_count", c.historyCheckCount);
+    zbot::mainConfig.getParam("history_max_age_minutes", c.historyMaxAgeMinutes);
   } catch (ZConfigException& e) {
     zbot::log.write(ZLogger::LogLevel::WARNING, e.getError());
   }
@@ -881,6 +892,7 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
   ZStorage pendingStorage(configSender.path + "/pending");
   ZStorage processingStorage(configSender.path + "/processing");
   Ztbot tbot(configSender.token);
+  ZMessageHistory history;
 
   while (true) {
     struct timespec timeout;
@@ -904,15 +916,161 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
         if (!zbotStorage.checkTrigger() || !sendBox.checkTrigger()) sendBox.disable();
         sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
-        if (sendBox.size() > configSender.minapprox) {
-          messages = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
-        } else {
-          messages = sendBox.popMessages();
-        }
+        messages = sendBox.popMessages();
         if (sendBox.getStatus()) {
           try {
-            for (std::string msg : messages) {
-              tbot.send(atoll(chat.c_str()), msg);
+            int64_t chatId = atoll(chat.c_str());
+            // Immediate mode: check recent history (in-memory) and group/send accordingly
+            if (configSender.immediateSend) {
+              history.cleanup(configSender.historyMaxAgeMinutes);
+              for (const std::string& msg : messages) {
+                auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount, configSender.historyMaxAgeMinutes);
+
+                auto stripHeader = [](const std::string& s) -> std::pair<int,std::string> {
+                  // returns {count, pattern} or {0, s}
+                  size_t i = 0;
+                  while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) i++;
+                  const std::string hdr = " similar messages were received:\n";
+                  if (i > 0 && i + hdr.size() <= s.size() && s.compare(i, hdr.size(), hdr) == 0) {
+                    int cnt = std::stoi(s.substr(0, i));
+                    return {cnt, s.substr(i + hdr.size())};
+                  }
+                  return {0, s};
+                };
+                auto matchesTemplate = [](const std::string& pattern, const std::string& text) {
+                  size_t i = 0, j = 0;
+                  while (i < pattern.size() && j < text.size()) {
+                    if (pattern[i] == '?') {
+                      // legacy multi-byte wildcards: consume following spaces (0..3)
+                      i++;
+                      int spaceCount = 0;
+                      while (i < pattern.size() && spaceCount < 3 && pattern[i] == ' ') { i++; spaceCount++; }
+                      // If number run, greedily consume digits
+                      if (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) {
+                        while (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) j++;
+                        continue;
+                      }
+                      unsigned char c = static_cast<unsigned char>(text[j]);
+                      int adv = (c & 0x80) == 0 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : 4;
+                      j += adv;
+                    } else {
+                      if (pattern[i] != text[j]) return false;
+                      i++; j++;
+                    }
+                  }
+                  if (i == pattern.size() && j == text.size()) return true;
+                  if (j == text.size()) {
+                    while (i < pattern.size()) {
+                      if (pattern[i] != '?') return false;
+                      i++;
+                      int spaceCount = 0; while (i < pattern.size() && spaceCount < 3 && pattern[i] == ' ') { i++; spaceCount++; }
+                    }
+                    return true;
+                  }
+                  return false;
+                };
+                auto patternsEquivalent = [&](const std::string& a, const std::string& b){
+                  return matchesTemplate(a,b) && matchesTemplate(b,a);
+                };
+
+                // 1) Попробовать обновить уже отправленную группу
+                int mergedCount = 1; std::string basePattern; std::vector<int32_t> groupIds;
+                for (const auto& hm : recent) {
+                  if (!hm.isGroup || hm.groupPattern.empty()) continue;
+                  if (matchesTemplate(hm.groupPattern, msg)) {
+                    if (basePattern.empty()) basePattern = hm.groupPattern;
+                    if (patternsEquivalent(basePattern, hm.groupPattern)) {
+                      mergedCount += hm.groupCount;
+                      groupIds.push_back(hm.messageId);
+                    }
+                  }
+                }
+                // Если прямого совпадения шаблона нет, попробуем адаптивно слить по Левенштейну (<= accuracy)
+                if (groupIds.empty()) {
+                  auto mergeWithPattern = [&](const std::string& pat, const std::string& text){
+                    std::string a = pat; std::string b = text;
+                    std::string ops = levensteinOps(a, b);
+                    int diffs = 0; for (char c: ops) if (c != '=') diffs++;
+                    size_t maxLen = std::max(a.size(), b.size());
+                    if (maxLen == 0) return std::pair<bool,std::string>(false, std::string());
+                    float ndist = (float)diffs / (float)maxLen;
+                    if (ndist > configSender.accuracy) return std::pair<bool,std::string>(false, std::string());
+                    // Сформировать объединённый шаблон
+                    std::string out; out.reserve(maxLen);
+                    size_t ia = 0, ib = 0;
+                    for (char op : ops) {
+                      if (op == '=') {
+                        char ca = a[ia], cb = b[ib];
+                        if (ca == '?' || cb == '?') out.push_back('?'); else out.push_back(ca);
+                        ia++; ib++;
+                      } else if (op == '!') {
+                        out.push_back('?'); ia++; ib++;
+                      } else if (op == '+') { // insertion in a
+                        out.push_back('?'); ib++;
+                      } else if (op == '-') { // deletion from a
+                        out.push_back('?'); ia++;
+                      }
+                    }
+                    return std::pair<bool,std::string>(true, out);
+                  };
+                  for (const auto& hm : recent) {
+                    if (!hm.isGroup || hm.groupPattern.empty()) continue;
+                    auto res = mergeWithPattern(hm.groupPattern, msg);
+                    if (res.first) {
+                      basePattern = res.second;
+                      mergedCount = hm.groupCount + 1;
+                      groupIds.push_back(hm.messageId);
+                      break;
+                    }
+                  }
+                }
+                if (!groupIds.empty()) {
+                  tbot.deleteMessages(chatId, groupIds);
+                  history.removeMessages(chatId, groupIds);
+                  std::string groupedText = basePattern + "\n\nSimilar messages received: " + std::to_string(mergedCount);
+                  auto sent = tbot.sendMessage(chatId, groupedText);
+                  if (sent) history.addMessage(chatId, sent->messageId, groupedText, true, basePattern, mergedCount);
+                  continue;
+                }
+
+                // 2) Иначе попытаться собрать новую группу с одиночными
+                // Build a temporary box with current msg plus recent singles
+                ZMsgBox box(processingStorage, chat.c_str());
+                box.pushMessage(msg);
+                for (const auto& hm : recent) if (!hm.isGroup) box.pushMessage(hm.text);
+                auto pats = box.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
+
+                int bestCount = 0; std::string bestPattern;
+                for (const auto& pr : pats) {
+                  auto [cnt, pat] = stripHeader(pr);
+                  if (cnt >= 2 && matchesTemplate(pat, msg)) {
+                    if (cnt > bestCount) { bestCount = cnt; bestPattern = pat; }
+                  }
+                }
+
+                if (bestCount >= 2) {
+                  // Collect IDs of matching recent singles
+                  std::vector<int32_t> toDelete;
+                  for (const auto& hm : recent) {
+                    if (!hm.isGroup && matchesTemplate(bestPattern, hm.text)) toDelete.push_back(hm.messageId);
+                  }
+                  if (!toDelete.empty()) { tbot.deleteMessages(chatId, toDelete); history.removeMessages(chatId, toDelete); }
+                  std::string groupedText = bestPattern + "\n\nSimilar messages received: " + std::to_string(bestCount);
+                  auto sent = tbot.sendMessage(chatId, groupedText);
+                  if (sent) history.addMessage(chatId, sent->messageId, groupedText, true, bestPattern, bestCount);
+                } else {
+                  auto sent = tbot.sendMessage(chatId, msg);
+                  if (sent) history.addMessage(chatId, sent->messageId, msg, false);
+                }
+              }
+            } else {
+              // Legacy batch mode
+              if (sendBox.size() > configSender.minapprox) {
+                auto grouped = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
+                for (const std::string& g : grouped) tbot.send(atoll(chat.c_str()), g);
+              } else {
+                for (const std::string& m : messages) tbot.send(atoll(chat.c_str()), m);
+              }
             }
           } catch (std::exception& e) {
             std::string err = "Sender exception: ";
