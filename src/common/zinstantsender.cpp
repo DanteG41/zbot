@@ -102,21 +102,14 @@ void ZInstantSender::sendMessage(int64_t chatId, const std::string& message) {
   // Find similar messages in history
   std::vector<HistoryMessage> similarMessages = findSimilarMessages(chatId, message);
   
-  // Debug logging
-  std::cout << "[ZInstantSender] Processing message for chat " << chatId << std::endl;
-  std::cout << "[ZInstantSender] Found " << similarMessages.size() << " similar messages" << std::endl;
-  
   if (similarMessages.empty()) {
     // No similar messages found, send immediately
-    std::cout << "[ZInstantSender] No similar messages, sending directly" << std::endl;
     TgBot::Message::Ptr sentMsg = bot_.sendMessage(chatId, message);
     if (sentMsg) {
       history_.addMessage(chatId, sentMsg->messageId, message);
-      std::cout << "[ZInstantSender] Added message to history with ID " << sentMsg->messageId << std::endl;
     }
   } else {
     // Found similar messages, group them
-    std::cout << "[ZInstantSender] Grouping messages!" << std::endl;
     std::vector<std::string> messagesToGroup;
     std::vector<int32_t> messageIdsToDelete;
     

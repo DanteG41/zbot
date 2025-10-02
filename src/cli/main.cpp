@@ -2,8 +2,6 @@
 #include <zinit.h>
 #include <zmsgbox.h>
 #include <ztbot.h>
-#include <zmessagehistory.h>
-#include <zinstantsender.h>
 
 void printHelp(const char* appname) {
   fprintf(stderr, "Usage: %s [-f configfile] -c chat -m message\n\
@@ -71,22 +69,7 @@ int main(int argc, char* argv[]) {
       telegramConfig.load("telegram", defaultconfig::telegramParams);
       telegramConfig.getParam("token", telegramToken);
       Ztbot bot(telegramToken);
-      
-      // Use instant sender with grouping for immediate mode
-      ZMessageHistory messageHistory;
-      float accuracy, spread;
-      int historyCheckCount, historyMaxAgeMinutes;
-      bool dontApproximateMultibyte;
-      
-      config.getParam("accuracy", accuracy);
-      config.getParam("spread", spread);
-      config.getParam("dont_approximate_multibyte", dontApproximateMultibyte);
-      config.getParam("history_check_count", historyCheckCount);
-      config.getParam("history_max_age_minutes", historyMaxAgeMinutes);
-      
-      ZInstantSender instantSender(bot, messageHistory, accuracy, spread,
-                                  dontApproximateMultibyte, historyCheckCount, historyMaxAgeMinutes);
-      instantSender.sendMessage(atoll(chat), msg);
+      bot.send(atoll(chat), msg);
     } else {
       ZStorage zbotStorage(path);
       ZStorage pendingStorage(path + "/pending");

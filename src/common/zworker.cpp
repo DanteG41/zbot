@@ -925,9 +925,7 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
             if (configSender.immediateSend) {
               // New immediate sending mode with dynamic grouping
               messages = sendBox.popMessages();
-              zbot::log << "zbotd: sender using immediate mode with " + std::to_string(messages.size()) + " messages";
               for (const std::string& msg : messages) {
-                zbot::log << "zbotd: sending message with grouping: " + msg.substr(0, 50) + "...";
                 instantSender.sendMessage(atoll(chat.c_str()), msg);
               }
             } else {
