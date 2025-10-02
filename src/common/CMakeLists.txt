@@ -9,9 +9,7 @@ set(SOURCES hirschberg.cpp
 	zstorage.cpp
 	ztbot.cpp
 	zzabbix.cpp
-	defaultconfig.cpp
-	zmessagehistory.cpp
-	zinstantsender.cpp)
+	defaultconfig.cpp)
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 target_link_libraries(${PROJECT_NAME} TgBot)

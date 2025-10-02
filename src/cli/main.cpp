@@ -57,14 +57,7 @@ int main(int argc, char* argv[]) {
   try {
     config.load(defaultconfig::params);
     config.getParam("storage", path);
-    
-    bool immediateSend = immediately;
-    if (!immediately) {
-      // Check if immediate_send is enabled in config
-      config.getParam("immediate_send", immediateSend);
-    }
-    
-    if (immediateSend) {
+    if (immediately) {
       std::string telegramToken;
       telegramConfig.load("telegram", defaultconfig::telegramParams);
       telegramConfig.getParam("token", telegramToken);

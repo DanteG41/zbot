@@ -17,7 +17,6 @@ private:
   };
 
 public:
-  ZMsgBox() : ZStorage(""), chatName_("") {} // Default constructor for temporary use
   ZMsgBox(ZStorage& s, const char* c);
   std::vector<std::string> approximation(float accuracy, float spread, bool dont_approximate_multibyte);
   std::vector<std::string> popMessages();
