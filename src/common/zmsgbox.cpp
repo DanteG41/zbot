@@ -174,27 +174,36 @@ static std::string mergeTokens(const std::string& a, const std::string& b, bool&
   return merged;
 }
 
-static bool tokensCompatible(const std::string& a, const std::string& b) {
-  bool wildcarded;
+/* Costs are counted in halves of a token. A wildcard stands for any token, so
+pairing it with one costs half of a real difference: that keeps the alignment
+from pairing a wildcard with a literal while a literal that matches exactly is
+left substituted. */
+enum tokenCost { costMatch = 0, costWildcard = 1, costChange = 2 };
+
+static int alignmentCost(const std::string& a, const std::string& b) {
+  bool wildcarded = false;
+
+  if (a == b) return costMatch;
   mergeTokens(a, b, wildcarded);
-  return !wildcarded;
+  if (wildcarded) return costChange;
+  if (a == wildcard or b == wildcard) return costWildcard;
+  return costMatch; /* the tokens differ in digits only */
 }
 
-/* Needleman-Wunsch alignment of two token sequences. Every insertion, deletion
-and substitution costs one token. The edit operations are returned as '=' match,
-'!' substitution, '-' deletion and '+' insertion. */
+/* Needleman-Wunsch alignment of two token sequences. The edit operations are
+returned as '=' match, '!' substitution, '-' deletion and '+' insertion. */
 static int alignTokens(const std::vector<std::string>& a, const std::vector<std::string>& b,
                        std::string& operations) {
   size_t n = a.size(), m = b.size();
   std::vector<std::vector<int>> cost(n + 1, std::vector<int>(m + 1, 0));
 
-  for (size_t i = 1; i <= n; i++) cost[i][0] = i;
-  for (size_t j = 1; j <= m; j++) cost[0][j] = j;
+  for (size_t i = 1; i <= n; i++) cost[i][0] = i * costChange;
+  for (size_t j = 1; j <= m; j++) cost[0][j] = j * costChange;
   for (size_t i = 1; i <= n; i++) {
     for (size_t j = 1; j <= m; j++) {
-      int substitution = cost[i - 1][j - 1] + (tokensCompatible(a[i - 1], b[j - 1]) ? 0 : 1);
-      int deletion     = cost[i - 1][j] + 1;
-      int insertion    = cost[i][j - 1] + 1;
+      int substitution = cost[i - 1][j - 1] + alignmentCost(a[i - 1], b[j - 1]);
+      int deletion     = cost[i - 1][j] + costChange;
+      int insertion    = cost[i][j - 1] + costChange;
       cost[i][j]       = std::min(substitution, std::min(deletion, insertion));
     }
   }
@@ -203,7 +212,7 @@ static int alignTokens(const std::vector<std::string>& a, const std::vector<std:
   size_t i = n, j = m;
   while (i > 0 or j > 0) {
     if (i > 0 and j > 0) {
-      int substitution = cost[i - 1][j - 1] + (tokensCompatible(a[i - 1], b[j - 1]) ? 0 : 1);
+      int substitution = cost[i - 1][j - 1] + alignmentCost(a[i - 1], b[j - 1]);
       if (cost[i][j] == substitution) {
         operations.push_back(a[i - 1] == b[j - 1] ? '=' : '!');
         i--;
@@ -211,7 +220,7 @@ static int alignTokens(const std::vector<std::string>& a, const std::vector<std:
         continue;
       }
     }
-    if (i > 0 and cost[i][j] == cost[i - 1][j] + 1) {
+    if (i > 0 and (j == 0 or cost[i][j] == cost[i - 1][j] + costChange)) {
       operations.push_back('-');
       i--;
       continue;
@@ -231,7 +240,7 @@ float messageTokenDistance(const std::string& a, const std::string& b) {
   splitTokens(b, tokensB, separatorsB);
   size_t length = std::max(tokensA.size(), tokensB.size());
   if (!length) return 0;
-  return static_cast<float>(alignTokens(tokensA, tokensB, operations)) / length;
+  return static_cast<float>(alignTokens(tokensA, tokensB, operations)) / (costChange * length);
 }
 
 std::string mergeMessageTemplates(const std::string& a, const std::string& b,

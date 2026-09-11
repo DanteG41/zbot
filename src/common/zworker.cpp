@@ -1069,9 +1069,11 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 if (configSender.historyMaxAgeMinutes > 0 && configSender.historyCheckCount > 0) {
                   auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount,
                                                           configSender.historyMaxAgeMinutes);
+                  std::vector<std::string> absorbed;
                   for (const HistoryMessage& hm : recent) {
                     const std::string& sent = hm.isGroup ? hm.groupPattern : hm.text;
                     bool multibyteChanged   = false;
+                    bool similar            = true;
 
                     if (sent.empty() || hm.sample.empty()) continue;
                     /* Both sides are compared as plain messages. Measuring against
@@ -1079,11 +1081,20 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                     everything that follows. */
                     if (messageTokenDistance(group.sample, hm.sample) >= configSender.accuracy)
                       continue;
+                    /* Every message of the group has to be similar to every other one.
+                    Without that, two groups that were kept apart on purpose would be
+                    joined by a third message that happens to sit between them. */
+                    for (const std::string& taken : absorbed) {
+                      if (messageTokenDistance(taken, hm.sample) >= configSender.accuracy)
+                        similar = false;
+                    }
+                    if (!similar) continue;
                     std::string merged = mergeMessageTemplates(pattern, sent, &multibyteChanged);
                     if (configSender.dont_approximate_multibyte && multibyteChanged) continue;
                     pattern = merged;
                     sample  = hm.sample; // the oldest message of the group stays its anchor
                     count += hm.groupCount;
+                    absorbed.push_back(hm.sample);
                     sentIds.push_back(hm.messageId);
                   }
                 }
