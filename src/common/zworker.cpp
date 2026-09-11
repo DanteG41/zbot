@@ -74,8 +74,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
   webhookUrl += configBot.webhookPublicHost;
   webhookUrl += configBot.webhookPath;
 
-  bot.getEvents().onCallbackQuery([&bot, &mainMenu, &infoMenu, &configBot, &zabbix,
-                                   &waitEvent](TgBot::CallbackQuery::Ptr callback) {
+  auto callbackQuery = [&bot, &mainMenu, &infoMenu, &configBot, &zabbix,
+                        &waitEvent](TgBot::CallbackQuery::Ptr callback) {
     if (configBot.adminUsers.count(callback->from->username)) {
       std::string messageText;
       bool notify = false;
@@ -242,7 +242,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         event.callback = callbackData;
         waitEvent.push_back(event);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-        bot.getApi().sendMessage(callback->message->chat->id, "Send the name of the maintenance period:");
+        bot.getApi().sendMessage(callback->message->chat->id,
+                                 "Send the name of the maintenance period:");
       } else if (callback->data.compare(0, 14, "screen.select ") == 0 ||
                  callback->data.compare(0, 22, "screen.select.refresh ") == 0) {
         std::vector<std::string> callbackData, images;
@@ -396,7 +397,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         event.callback = callbackData;
         waitEvent.push_back(event);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-        bot.getApi().sendMessage(callback->message->chat->id, "Send the text of the acknowledgement:");
+        bot.getApi().sendMessage(callback->message->chat->id,
+                                 "Send the text of the acknowledgement:");
       }
       if (notify) {
         for (std::string s : configBot.notifyChats) {
@@ -404,51 +406,82 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         }
       }
     }
+  };
+
+  /* An exception thrown while a menu is built reaches the telegram event loop,
+  where nobody catches it, and aborts the daemon. Report it in the chat the menu
+  was called from and carry on. */
+  bot.getEvents().onCallbackQuery([&bot, &callbackQuery](TgBot::CallbackQuery::Ptr callback) {
+    std::string error;
+    try {
+      callbackQuery(callback);
+      return;
+    } catch (ZZabbixException& e) {
+      error = std::string("Zabbix: ") + e.getError();
+    } catch (TgBot::TgException& e) {
+      error = std::string("Telegram: ") + e.what();
+    } catch (std::exception& e) {
+      error = std::string("Menu: ") + e.what();
+    }
+    zbot::log.write(ZLogger::LogLevel::ERROR, error);
+    try {
+      bot.getApi().sendMessage(callback->message->chat->id, "⚠️ " + error);
+    } catch (std::exception& e) {
+      zbot::log.write(ZLogger::LogLevel::ERROR, std::string("TgBot exception: ") + e.what());
+    }
   });
   bot.getEvents().onCommand("start", [&bot, &mainMenu, &configBot](TgBot::Message::Ptr message) {
-    std::string botname = "@" + bot.getApi().getMe()->username;
-    bool access         = false;
-    if (message->text.size() == 6 + botname.size()) {
-      if (message->text.compare(message->text.size() - botname.size(), botname.size(), botname) ==
-          0)
+    try {
+      std::string botname = "@" + bot.getApi().getMe()->username;
+      bool access         = false;
+      if (message->text.size() == 6 + botname.size()) {
+        if (message->text.compare(message->text.size() - botname.size(), botname.size(), botname) ==
+            0)
+          access = true;
+      } else if (message->text.size() == 6)
         access = true;
-    } else if (message->text.size() == 6)
-      access = true;
-    if (access) {
-      if (configBot.adminUsers.count(message->from->username)) {
-        bot.getApi().sendMessage(message->chat->id, "*Select an action:*", false, 0, mainMenu,
-                                 "MarkDown");
-      } else {
-        bot.getApi().sendMessage(message->chat->id, "Access denied.");
+      if (access) {
+        if (configBot.adminUsers.count(message->from->username)) {
+          bot.getApi().sendMessage(message->chat->id, "*Select an action:*", false, 0, mainMenu,
+                                   "MarkDown");
+        } else {
+          bot.getApi().sendMessage(message->chat->id, "Access denied.");
+        }
       }
+    } catch (std::exception& e) {
+      zbot::log.write(ZLogger::LogLevel::ERROR, std::string("TgBot exception: ") + e.what());
     }
   });
   bot.getEvents().onNonCommandMessage(
       [&bot, &configBot, &zabbix, &waitEvent](TgBot::Message::Ptr message) {
-        for (std::vector<zEvent>::iterator it = waitEvent.begin(); it != waitEvent.end(); it++) {
-          if (message->from->username == it->from && message->chat->id == it->chat) {
-            if (it->callback[0] == "maintenance.create.select.grp") {
-              std::string response = "✅ Maintenance period successful created.";
-              try {
-                zabbix.createMaintenance(it->callback[1], message->text);
-              } catch (ZZabbixException& e) {
-                response = "⚠️ ERROR: " + std::string(e.getError());
+        try {
+          for (std::vector<zEvent>::iterator it = waitEvent.begin(); it != waitEvent.end(); it++) {
+            if (message->from->username == it->from && message->chat->id == it->chat) {
+              if (it->callback[0] == "maintenance.create.select.grp") {
+                std::string response = "✅ The maintenance period has been created.";
+                try {
+                  zabbix.createMaintenance(it->callback[1], message->text);
+                } catch (ZZabbixException& e) {
+                  response = "⚠️ ERROR: " + std::string(e.getError());
+                }
+                bot.getApi().sendMessage(message->chat->id, response);
+                it = waitEvent.erase(it);
+                if (it == waitEvent.end()) break;
+              } else if (it->callback[0] == "problems.select") {
+                std::string response = "✅ The problem has been acknowledged.";
+                try {
+                  zabbix.ackProblem(zabbix.getEvent(it->callback[1]), message->text);
+                } catch (ZZabbixException& e) {
+                  response = "⚠️ ERROR: " + std::string(e.getError());
+                }
+                bot.getApi().sendMessage(message->chat->id, response);
+                it = waitEvent.erase(it);
+                if (it == waitEvent.end()) break;
               }
-              bot.getApi().sendMessage(message->chat->id, response);
-              it = waitEvent.erase(it);
-              if (it == waitEvent.end()) break;
-            } else if (it->callback[0] == "problems.select") {
-              std::string response = "✅ Problem was acknowledge.";
-              try {
-                zabbix.ackProblem(zabbix.getEvent(it->callback[1]), message->text);
-              } catch (ZZabbixException& e) {
-                response = "⚠️ ERROR: " + std::string(e.getError());
-              }
-              bot.getApi().sendMessage(message->chat->id, response);
-              it = waitEvent.erase(it);
-              if (it == waitEvent.end()) break;
             }
           }
+        } catch (std::exception& e) {
+          zbot::log.write(ZLogger::LogLevel::ERROR, std::string("TgBot exception: ") + e.what());
         }
       });
 
