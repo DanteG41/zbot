@@ -35,10 +35,36 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
 
   ZZabbix zabbix(configBot.zabbixUrl.c_str(), configBot.zabbixUser.c_str(),
                  configBot.zabbixPassword.c_str());
-  zabbix.auth();
+  TgBot::InlineKeyboardMarkup::Ptr mainMenu, infoMenu;
 
-  TgBot::InlineKeyboardMarkup::Ptr mainMenu = zworker::createMenu(zworker::Menu::MAIN, zabbix);
-  TgBot::InlineKeyboardMarkup::Ptr infoMenu = zworker::createMenu(zworker::Menu::INFO, zabbix);
+  /* Zabbix may be unreachable or refuse the login while the daemon starts. Keep
+  trying instead of leaving the worker with an exception, which used to abort it. */
+  while (true) {
+    try {
+      zabbix.auth();
+      TgBot::InlineKeyboardMarkup::Ptr main = zworker::createMenu(zworker::Menu::MAIN, zabbix);
+      TgBot::InlineKeyboardMarkup::Ptr info = zworker::createMenu(zworker::Menu::INFO, zabbix);
+      mainMenu                              = main;
+      infoMenu                              = info;
+      break;
+    } catch (ZZabbixException& e) {
+      std::string err = "Zabbix exception: ";
+      err += e.getError();
+      zbot::log.write(ZLogger::LogLevel::ERROR, err);
+    } catch (std::exception& e) {
+      std::string err = "Zabbix authentication exception: ";
+      err += e.what();
+      zbot::log.write(ZLogger::LogLevel::ERROR, err);
+    }
+
+    struct timespec timeout;
+    timeout.tv_sec  = configBot.wait > 0 ? configBot.wait : 10;
+    timeout.tv_nsec = 0;
+    if (sigtimedwait(&sigset, &siginfo, &timeout) > 0 and siginfo.si_signo == SIGTERM) {
+      zbot::log << "zbotd: stop bot worker by signal SIGTERM";
+      return zbot::ChildSignal::CHILD_TERMINATE;
+    }
+  }
 
   TgBot::Bot bot(configBot.token);
   std::string webhookUrl = "https://";

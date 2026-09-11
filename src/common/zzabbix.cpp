@@ -83,8 +83,30 @@ std::string ZZabbix::extractBody(const std::string& data) const {
 boost::property_tree::ptree ZZabbix::parseJson(const std::string& json) const {
   boost::property_tree::ptree tree;
   std::istringstream input(json);
-  boost::property_tree::read_json(input, tree);
+  try {
+    boost::property_tree::read_json(input, tree);
+  } catch (std::exception& e) {
+    throw ZZabbixException(std::string("unable to parse the zabbix answer: ") + e.what());
+  }
   return tree;
+}
+
+/* The answer of a json-rpc call holds either a result or an error object. Report
+the error as a ZZabbixException instead of letting the property tree throw its own
+exception, which no caller expects and which terminates the daemon. */
+std::string ZZabbix::getErrorMessage(const ptree& response) const {
+  std::string message = response.get<std::string>("error.message", "");
+  std::string data    = response.get<std::string>("error.data", "");
+
+  if (!data.empty()) message += message.empty() ? data : " " + data;
+  return message.empty() ? "the answer holds no result" : message;
+}
+
+const ptree& ZZabbix::getResult(const ptree& response) const {
+  boost::optional<const ptree&> result = response.get_child_optional("result");
+
+  if (!result) throw ZZabbixException("zabbix: " + getErrorMessage(response));
+  return *result;
 }
 
 std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
@@ -95,39 +117,56 @@ std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
   if (!authToken_.empty()) pt.put("auth", authToken_);
   write_json(buf, pt, false);
 
-  tcp::resolver resolver(ioService_);
-  tcp::resolver::query query(zabbixjsonrpc_.host, "443");
-  ssl::context context(ssl::context::tlsv12_client);
-  context.set_default_verify_paths();
-  ssl::stream<tcp::socket> socket(ioService_, context);
-  connect(socket.lowest_layer(), resolver.resolve(query));
-  socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
-  socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
-  socket.set_verify_mode(ssl::verify_none);
-  socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
-  socket.handshake(ssl::stream<tcp::socket>::client);
-
-  std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
-  write(socket, buffer(request.c_str(), request.length()));
-
   std::string response;
-  char buff[65536];
-  boost::system::error_code error;
-  while (!error) {
-    size_t bytes = read(socket, buffer(buff), error);
-    response += std::string(buff, bytes);
+  try {
+    tcp::resolver resolver(ioService_);
+    tcp::resolver::query query(zabbixjsonrpc_.host, "443");
+    ssl::context context(ssl::context::tlsv12_client);
+    context.set_default_verify_paths();
+    ssl::stream<tcp::socket> socket(ioService_, context);
+    connect(socket.lowest_layer(), resolver.resolve(query));
+    socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
+    socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
+    socket.set_verify_mode(ssl::verify_none);
+    socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
+    socket.handshake(ssl::stream<tcp::socket>::client);
+
+    std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
+    write(socket, buffer(request.c_str(), request.length()));
+
+    char buff[65536];
+    boost::system::error_code error;
+    while (!error) {
+      size_t bytes = read(socket, buffer(buff), error);
+      response += std::string(buff, bytes);
+    }
+  } catch (std::exception& e) {
+    throw ZZabbixException("unable to reach zabbix on " + zabbixjsonrpc_.host + ": " + e.what());
   }
   return ZZabbix::extractBody(response);
 }
 
 bool ZZabbix::auth() {
   ptree request, response;
-  request.put("method", "user.login");
-  request.put("params.user", user_);
-  request.put("params.password", password_);
 
-  response   = ZZabbix::parseJson(sendRequest(request));
-  authToken_ = response.get<std::string>("result");
+  /* Zabbix renamed the login parameter from user to username in 5.4 and dropped
+  the old name in 6.4, so ask with the current name and fall back to the old one
+  when the server does not know it. */
+  request.put("method", "user.login");
+  request.put("params.username", user_);
+  request.put("params.password", password_);
+  response = ZZabbix::parseJson(sendRequest(request));
+
+  if (!response.get_child_optional("result") and
+      ZZabbix::getErrorMessage(response).find("username") != std::string::npos) {
+    ptree legacy;
+    legacy.put("method", "user.login");
+    legacy.put("params.user", user_);
+    legacy.put("params.password", password_);
+    response = ZZabbix::parseJson(sendRequest(legacy));
+  }
+
+  authToken_ = ZZabbix::getResult(response).get_value<std::string>();
 
   getSession();
   getApiVersion();
@@ -216,7 +255,8 @@ void ZZabbix::getApiVersion() {
     size_t bytes = read(socket, buffer(buff), error);
     response += std::string(buff, bytes);
   }
-  apiversion_ = ZZabbix::parseJson(ZZabbix::extractBody(response)).get<std::string>("result");
+  ptree answer = ZZabbix::parseJson(ZZabbix::extractBody(response));
+  apiversion_  = ZZabbix::getResult(answer).get_value<std::string>();
 }
 
 std::vector<std::string> ZZabbix::downloadGraphs(std::vector<std::string> ids) {
@@ -280,7 +320,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getMaintenances(int li
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     int activeSince, activeTill;
@@ -320,7 +360,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getActions(int status,
   request.put("params.filter.status", status);
 
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     std::string id, name;
@@ -356,7 +396,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getProblems(int group,
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     std::string id, name;
@@ -427,7 +467,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getScreens(int limit) 
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     std::string id, name;
@@ -449,7 +489,7 @@ std::string ZZabbix::getMaintenanceName(std::string id) {
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
 }
@@ -464,7 +504,7 @@ std::string ZZabbix::getScreenName(std::string id) {
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
 }
@@ -479,7 +519,7 @@ std::string ZZabbix::getActionName(std::string id) {
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
 }
@@ -494,7 +534,7 @@ std::string ZZabbix::getHostGrpName(std::string id) {
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
 }
@@ -511,7 +551,7 @@ std::string ZZabbix::getEvent(std::string id) {
   request.add_child("params.output", params);
   std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("eventid");
   }
 }
@@ -533,7 +573,7 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int filter,
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     int activeSince, activeTill;
@@ -569,7 +609,7 @@ std::vector<std::string> ZZabbix::getScreenGraphs(std::string id, int limit) {
     throw ZZabbixException(response.get<std::string>("error.data", ""));
   }
 
-  for (ptree::value_type const& v : response.get_child("result")) {
+  for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     const std::string& key = v.first;
     const ptree& subtree   = v.second;
     result.push_back(subtree.get<std::string>("resourceid"));

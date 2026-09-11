@@ -24,6 +24,8 @@ private:
                               std::vector<std::string> cookies = std::vector<std::string>());
   std::string extractBody(const std::string& data) const;
   boost::property_tree::ptree parseJson(const std::string& json) const;
+  std::string getErrorMessage(const boost::property_tree::ptree& response) const;
+  const boost::property_tree::ptree& getResult(const boost::property_tree::ptree& response) const;
 
 public:
   ZZabbix(const char* s, const char* u, const char* p)
