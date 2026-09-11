@@ -1,7 +1,7 @@
 #include <dirent.h>
 #include <fstream>
-#include <hirschberg.h>
-#include <map>
+#include <algorithm>
+#include <cctype>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <zmsgbox.h>
@@ -102,233 +102,299 @@ std::vector<std::string> ZMsgBox::popMessages() {
   }
 };
 
-float levensteinDistance(std::string& s, std::string& t) {
-  float distance = 0;
-  char *ops, *c;
+/* Message templates are built on whole tokens (runs of non-whitespace characters)
+instead of single bytes. A template keeps every token that is common to the whole
+group, replaces varying digits inside a token with '?' and collapses a token that
+varies completely into a single '?' wildcard. Working on tokens keeps multi-byte
+characters intact and never lets a template grow with every merged message. */
 
-  ops = stringmetric::hirschberg(s.c_str(), t.c_str());
-  for (c = ops; *c != '\0'; c++) {
-    if (*c != '=') distance++;
+static const char* const wildcard = "?";
+
+static bool isAsciiDigit(char c) { return c >= '0' and c <= '9'; }
+
+static bool hasMultibyte(const std::string& token) {
+  for (unsigned char c : token) {
+    if (c & 0x80) return true;
   }
-  free(ops);
-  return distance;
+  return false;
 }
 
-std::string levensteinOps(std::string& s, std::string& t) {
-  char* ops;
-  std::string editOperations;
-  ops            = stringmetric::hirschberg(s.c_str(), t.c_str());
-  editOperations = ops;
+/* Split a message into tokens and remember the whitespace preceding each of them,
+so that a template can be rendered back with the original layout. */
+static void splitTokens(const std::string& message, std::vector<std::string>& tokens,
+                        std::vector<std::string>& separators) {
+  size_t i = 0;
+  while (i < message.size()) {
+    std::string separator;
+    while (i < message.size() and isspace(static_cast<unsigned char>(message[i])))
+      separator.push_back(message[i++]);
+    if (i == message.size()) break;
+    std::string token;
+    while (i < message.size() and !isspace(static_cast<unsigned char>(message[i])))
+      token.push_back(message[i++]);
+    separators.push_back(separator);
+    tokens.push_back(token);
+  }
+}
 
-  free(ops);
-  return editOperations;
+static std::string joinTokens(const std::vector<std::string>& tokens,
+                              const std::vector<std::string>& separators) {
+  std::string result;
+  for (size_t i = 0; i < tokens.size(); i++) {
+    result += separators[i];
+    result += tokens[i];
+  }
+  return result;
+}
+
+/* Merge two tokens. Identical tokens are kept as they are, tokens of the same
+length that differ in digits only keep their constant part, everything else
+becomes a wildcard. The wildcard flag tells the caller that the tokens have
+nothing in common. */
+static std::string mergeTokens(const std::string& a, const std::string& b, bool& wildcarded) {
+  wildcarded = false;
+  if (a == b) return a;
+  if (a == wildcard or b == wildcard) return wildcard;
+  if (a.size() != b.size()) {
+    wildcarded = true;
+    return wildcard;
+  }
+  std::string merged;
+  for (size_t i = 0; i < a.size(); i++) {
+    if (a[i] == b[i]) {
+      merged.push_back(a[i]);
+      continue;
+    }
+    if (!(isAsciiDigit(a[i]) or a[i] == '?') or !(isAsciiDigit(b[i]) or b[i] == '?')) {
+      wildcarded = true;
+      return wildcard;
+    }
+    merged.push_back('?');
+  }
+  return merged;
+}
+
+static bool tokensCompatible(const std::string& a, const std::string& b) {
+  bool wildcarded;
+  mergeTokens(a, b, wildcarded);
+  return !wildcarded;
+}
+
+/* Needleman-Wunsch alignment of two token sequences. Every insertion, deletion
+and substitution costs one token. The edit operations are returned as '=' match,
+'!' substitution, '-' deletion and '+' insertion. */
+static int alignTokens(const std::vector<std::string>& a, const std::vector<std::string>& b,
+                       std::string& operations) {
+  size_t n = a.size(), m = b.size();
+  std::vector<std::vector<int>> cost(n + 1, std::vector<int>(m + 1, 0));
+
+  for (size_t i = 1; i <= n; i++) cost[i][0] = i;
+  for (size_t j = 1; j <= m; j++) cost[0][j] = j;
+  for (size_t i = 1; i <= n; i++) {
+    for (size_t j = 1; j <= m; j++) {
+      int substitution = cost[i - 1][j - 1] + (tokensCompatible(a[i - 1], b[j - 1]) ? 0 : 1);
+      int deletion     = cost[i - 1][j] + 1;
+      int insertion    = cost[i][j - 1] + 1;
+      cost[i][j]       = std::min(substitution, std::min(deletion, insertion));
+    }
+  }
+
+  operations.clear();
+  size_t i = n, j = m;
+  while (i > 0 or j > 0) {
+    if (i > 0 and j > 0) {
+      int substitution = cost[i - 1][j - 1] + (tokensCompatible(a[i - 1], b[j - 1]) ? 0 : 1);
+      if (cost[i][j] == substitution) {
+        operations.push_back(a[i - 1] == b[j - 1] ? '=' : '!');
+        i--;
+        j--;
+        continue;
+      }
+    }
+    if (i > 0 and cost[i][j] == cost[i - 1][j] + 1) {
+      operations.push_back('-');
+      i--;
+      continue;
+    }
+    operations.push_back('+');
+    j--;
+  }
+  std::reverse(operations.begin(), operations.end());
+  return cost[n][m];
+}
+
+float messageTokenDistance(const std::string& a, const std::string& b) {
+  std::vector<std::string> tokensA, separatorsA, tokensB, separatorsB;
+  std::string operations;
+
+  splitTokens(a, tokensA, separatorsA);
+  splitTokens(b, tokensB, separatorsB);
+  size_t length = std::max(tokensA.size(), tokensB.size());
+  if (!length) return 0;
+  return static_cast<float>(alignTokens(tokensA, tokensB, operations)) / length;
+}
+
+std::string mergeMessageTemplates(const std::string& a, const std::string& b,
+                                  bool* multibyteChanged) {
+  std::vector<std::string> tokensA, separatorsA, tokensB, separatorsB;
+  std::vector<std::string> tokens, separators;
+  std::string operations;
+
+  if (multibyteChanged) *multibyteChanged = false;
+  splitTokens(a, tokensA, separatorsA);
+  splitTokens(b, tokensB, separatorsB);
+  alignTokens(tokensA, tokensB, operations);
+
+  size_t i = 0, j = 0;
+  for (char operation : operations) {
+    std::string token, separator;
+
+    switch (operation) {
+    case '=':
+    case '!': {
+      bool wildcarded = false;
+      token           = mergeTokens(tokensA[i], tokensB[j], wildcarded);
+      separator       = separatorsA[i];
+      if (multibyteChanged and token != tokensA[i] and
+          (hasMultibyte(tokensA[i]) or hasMultibyte(tokensB[j])))
+        *multibyteChanged = true;
+      i++;
+      j++;
+      break;
+    }
+    case '-':
+      token     = wildcard;
+      separator = separatorsA[i];
+      if (multibyteChanged and hasMultibyte(tokensA[i])) *multibyteChanged = true;
+      i++;
+      break;
+    default:
+      token     = wildcard;
+      separator = separatorsB[j];
+      if (multibyteChanged and hasMultibyte(tokensB[j])) *multibyteChanged = true;
+      j++;
+      break;
+    }
+
+    /* Collapse neighbouring wildcards, otherwise a template would gain a token
+    on every merged message. */
+    if (token == wildcard and !tokens.empty() and tokens.back() == wildcard) continue;
+    /* A token taken from the message keeps the whitespace it had there, but the
+    leading whitespace belongs to the first token only. */
+    if (!tokens.empty() and separator.empty()) separator = " ";
+    tokens.push_back(token);
+    separators.push_back(separator);
+  }
+  if (!tokens.empty())
+    separators[0] = !separatorsA.empty()   ? separatorsA[0]
+                    : !separatorsB.empty() ? separatorsB[0]
+                                           : std::string();
+  return joinTokens(tokens, separators);
+}
+
+/* A template token matches a message token when the constant part is the same
+and every masked position holds a digit. A bare '?' stands for any number of
+whole tokens, including none, because a wildcard also takes the place of a token
+that one of the grouped messages does not have. */
+static bool tokenMatches(const std::string& pattern, const std::string& token) {
+  if (pattern.size() != token.size()) return false;
+  for (size_t i = 0; i < pattern.size(); i++) {
+    if (pattern[i] == token[i]) continue;
+    if (pattern[i] != '?' or !isAsciiDigit(token[i])) return false;
+  }
+  return true;
+}
+
+bool templateMatchesMessage(const std::string& pattern, const std::string& text) {
+  std::vector<std::string> patternTokens, patternSeparators, tokens, separators;
+
+  splitTokens(pattern, patternTokens, patternSeparators);
+  splitTokens(text, tokens, separators);
+
+  size_t n = patternTokens.size(), m = tokens.size();
+  std::vector<std::vector<bool>> matched(n + 1, std::vector<bool>(m + 1, false));
+  matched[0][0] = true;
+  for (size_t i = 1; i <= n; i++)
+    matched[i][0] = matched[i - 1][0] and patternTokens[i - 1] == wildcard;
+  for (size_t i = 1; i <= n; i++) {
+    for (size_t j = 1; j <= m; j++) {
+      if (patternTokens[i - 1] == wildcard)
+        matched[i][j] = matched[i - 1][j - 1] or matched[i][j - 1] or matched[i - 1][j];
+      else
+        matched[i][j] = matched[i - 1][j - 1] and tokenMatches(patternTokens[i - 1], tokens[j - 1]);
+    }
+  }
+  return matched[n][m];
 }
 
 std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
                                                 bool dont_approximate_multibyte) {
-  std::multimap<std::string*, ZMsgBox::similar> similarmessages;
-  std::pair<std::multimap<std::string*, ZMsgBox::similar>::iterator,
-            std::multimap<std::string*, ZMsgBox::similar>::iterator>
-      tempIter;
+  struct group {
+    size_t representative; /* distances are measured against the first message of the
+                           group, never against its template, so that a group cannot
+                           drift away from the message it started with */
+    std::string pattern;
+    int count;
+  };
+  std::vector<group> groups;
   std::vector<std::string> result;
-  std::list<std::string*> keys;
 
-  /* Group similar messages where the Levenstein distance
-  less than the var accuracy */
+  for (size_t m = 0; m < messages_.size(); m++) {
+    const std::string& message = messages_[m];
+    std::vector<size_t> candidates;
+    std::vector<float> distances(groups.size(), 0);
+    float bestDistance = accuracy;
 
-  for (std::string& k : messages_) {
-    for (std::string& v : messages_) {
-      float dist;
-      bool insert = false;
-      bool find   = false;
+    for (size_t g = 0; g < groups.size(); g++) {
+      distances[g] = messageTokenDistance(message, messages_[groups[g].representative]);
+      if (distances[g] >= accuracy) continue;
+      candidates.push_back(g);
+      if (distances[g] < bestDistance) bestDistance = distances[g];
+    }
 
-      if (&k != &v) {
-        dist = levensteinDistance(k, v) / k.size();
-        similar sim(&v, dist);
-        if (dist < accuracy) {
-          if (!similarmessages.size()) insert = true;
-          for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = similarmessages.begin();
-               it != similarmessages.end(); it++) {
-            if ((it->first == &k and it->second.storage == &v) or
-                (it->first == &v and it->second.storage == &k))
-              continue;
-            if (it->first == &v) {
-              insert = false;
-              break;
-            }
-            if (it->second.storage == &v) {
-              if (it->second.distance - dist > spread) {
-                it = similarmessages.erase(it);
-                if (it == similarmessages.end()) break;
-              } else
-                find = true;
-            }
-            insert = true;
-          }
-          if (insert and !find)
-            if (dont_approximate_multibyte) {
-              std::string editingOperations;
-              editingOperations        = levensteinOps(k, v);
-              int si                   = 0;
-              bool unchanged_multibyte = true;
-              for (int i = 0; i < editingOperations.size(); i++) {
-                switch (editingOperations[i]) {
-                case '-':
-                case '!':
-                  if ((k[si] & 0x80) != 0) unchanged_multibyte = false;
-                  si++;
-                  break;
-                case '=':
-                  si++;
-                  break;
-                case '+':
-                  break;
-                }
-                if (!unchanged_multibyte || si == k.size()) break;
-              }
-              if (unchanged_multibyte) {
-                similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
-              }
-            } else
-              similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(&k, sim));
-        }
+    /* Groups no further away than spread from the closest one are equally good,
+    the biggest of them wins. */
+    int chosen = -1;
+    std::string chosenPattern;
+    while (!candidates.empty()) {
+      size_t best = candidates.size();
+      for (size_t c = 0; c < candidates.size(); c++) {
+        if (distances[candidates[c]] > bestDistance + spread) continue;
+        if (best == candidates.size() or
+            groups[candidates[c]].count > groups[candidates[best]].count)
+          best = c;
       }
+      if (best == candidates.size()) break;
+
+      bool multibyteChanged = false;
+      std::string pattern =
+          mergeMessageTemplates(groups[candidates[best]].pattern, message, &multibyteChanged);
+      if (dont_approximate_multibyte and multibyteChanged) {
+        candidates.erase(candidates.begin() + best);
+        continue;
+      }
+      chosen        = candidates[best];
+      chosenPattern = pattern;
+      break;
+    }
+
+    if (chosen < 0) {
+      group newGroup;
+      newGroup.representative = m;
+      newGroup.pattern        = message;
+      newGroup.count          = 1;
+      groups.push_back(newGroup);
+    } else {
+      groups[chosen].pattern = chosenPattern;
+      groups[chosen].count++;
     }
   }
 
-  // Remove the keys got into values.
-  for (std::multimap<std::string*, ZMsgBox::similar>::iterator itk = similarmessages.begin();
-       itk != similarmessages.end(); itk++) {
-    bool remove = false;
-    for (std::multimap<std::string*, ZMsgBox::similar>::iterator itv = similarmessages.begin();
-         itv != similarmessages.end(); itv++) {
-      if (itv->second.storage == itk->first) {
-        if (itv->second.distance - itk->second.distance < spread &&
-            itv->first != itk->second.storage) {
-          std::string* skey;
-          ZMsgBox::similar* kval;
-          skey   = itv->first;
-          kval   = &itk->second;
-          itv    = similarmessages.erase(itv);
-          remove = true;
-          itv    = similarmessages.insert(std::pair<std::string*, ZMsgBox::similar>(skey, *kval));
-        } else {
-          itv = similarmessages.erase(itv);
-          if (itv == similarmessages.end()) break;
-        }
-      }
-    }
-    if (remove) {
-      itk = similarmessages.erase(itk);
-      if (itk == similarmessages.end()) break;
-    }
-  }
-
-  /* Fill array with messages that cannot be approximated.
-  And collect unique keys. */
-  for (std::string& s : messages_) {
-    bool find = false;
-    for (std::pair<std::string*, ZMsgBox::similar> m : similarmessages) {
-      if (m.first == &s or m.second.storage == &s) {
-        find = true;
-        keys.push_back(m.first);
-      }
-    }
-    if (!find) result.push_back(s);
-  }
-
-  // Fill with approximated messages.
-  keys.sort();
-  keys.unique();
-  for (std::string* s : keys) {
-    tempIter                  = similarmessages.equal_range(s);
-    int maxLevensteinDistance = 0;
-    int groupSize             = 1;
-    std::string mostCommonPattern, prevPattern, editingOperations;
-    mostCommonPattern = *s;
-
-    for (std::multimap<std::string*, ZMsgBox::similar>::iterator it = tempIter.first;
-         it != tempIter.second; ++it) {
-      int unknownSeq = 0;
-      int si         = 0;
-
-      groupSize++;
-      editingOperations = levensteinOps(mostCommonPattern, *it->second.storage);
-      prevPattern       = mostCommonPattern;
-      mostCommonPattern.erase();
-      for (int i = 0; i < editingOperations.size(); i++) {
-        if ((prevPattern[si] & 0x80) == 0) { // lead bit is zero, must be a single ascii
-          switch (editingOperations[i]) {
-          case '-':
-          case '!':
-            mostCommonPattern.push_back('?');
-            si++;
-            break;
-          case '=':
-            mostCommonPattern.push_back(prevPattern[si]);
-            si++;
-            break;
-          default:
-            mostCommonPattern.push_back('?');
-            break;
-          }
-        } else if ((prevPattern[si] & 0xE0) == 0xC0) { // 110x xxxx 2 octets
-          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=') {
-            mostCommonPattern.push_back(prevPattern[si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            si++;
-            i++;
-          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!') {
-            mostCommonPattern.append("? ");
-            si += 2;
-            i++;
-          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+') {
-            mostCommonPattern.append("? ");
-            i++;
-          }
-        } else if ((prevPattern[si] & 0xF0) == 0xE0) { // 1110 xxxx 3 octets
-          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=' &&
-              editingOperations[i + 2] == '=') {
-            mostCommonPattern.push_back(prevPattern[si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            si++;
-            i += 2;
-          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!' ||
-                     editingOperations[i + 2] == '!') {
-            mostCommonPattern.append("?  ");
-            si += 3;
-            i += 2;
-          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
-                     editingOperations[i + 2] == '+') {
-            mostCommonPattern.append("?  ");
-            i += 2;
-          }
-        } else if ((prevPattern[si] & 0xF8) == 0xF0) { // 1111 0xxx 4 octets
-          if (editingOperations[i] == '=' && editingOperations[i + 1] == '=' &&
-              editingOperations[i + 2] == '=' && editingOperations[i + 3] == '=') {
-            mostCommonPattern.push_back(prevPattern[si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            mostCommonPattern.push_back(prevPattern[++si]);
-            si++;
-            i += 3;
-          } else if (editingOperations[i] == '!' || editingOperations[i + 1] == '!' ||
-                     editingOperations[i + 2] == '!' || editingOperations[i + 3] == '!') {
-            mostCommonPattern.append("?   ");
-            si += 4;
-            i += 3;
-          } else if (editingOperations[i] == '+' || editingOperations[i + 1] == '+' ||
-                     editingOperations[i + 2] == '+' || editingOperations[i + 3] == '+') {
-            mostCommonPattern.append("?   ");
-            i += 3;
-          }
-        }
-      }
-    }
-
-    result.push_back(std::to_string(groupSize) + " similar messages were received:\n" +
-                     mostCommonPattern);
+  for (const group& g : groups) {
+    if (g.count > 1)
+      result.push_back(std::to_string(g.count) + " similar messages were received:\n" + g.pattern);
+    else
+      result.push_back(messages_[g.representative]);
   }
   return result;
 }

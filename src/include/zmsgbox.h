@@ -1,8 +1,16 @@
 #ifndef ZMSGBOX_H
 #define ZMSGBOX_H
 #include <list>
+#include <string>
 #include <vector>
 #include <zstorage.h>
+
+/* Message template helpers. A template is a message where the varying parts are
+replaced with '?': either single digits inside a token or a whole token. */
+float messageTokenDistance(const std::string& a, const std::string& b);
+std::string mergeMessageTemplates(const std::string& a, const std::string& b,
+                                  bool* multibyteChanged = nullptr);
+bool templateMatchesMessage(const std::string& pattern, const std::string& text);
 
 class ZMsgBox : public ZStorage {
 private:
@@ -10,11 +18,6 @@ private:
   std::vector<std::string> messages_;
   std::vector<std::string> files_;
   std::string hex_string(int l);
-  struct similar {
-    float distance;
-    std::string* storage;
-    similar(std::string* s, float d) : storage(s), distance(d){};
-  };
 
 public:
   ZMsgBox(ZStorage& s, const char* c);

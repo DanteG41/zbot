@@ -8,8 +8,6 @@
 #include <cctype>
 
 // Forward declaration from zmsgbox.cpp
-float levensteinDistance(std::string& s, std::string& t);
-std::string levensteinOps(std::string& s, std::string& t);
 
 using boost::property_tree::ptree;
 using boost::property_tree::write_json;
@@ -938,36 +936,7 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                   return {0, s};
                 };
                 auto matchesTemplate = [](const std::string& pattern, const std::string& text) {
-                  size_t i = 0, j = 0;
-                  while (i < pattern.size() && j < text.size()) {
-                    if (pattern[i] == '?') {
-                      // legacy multi-byte wildcards: consume following spaces (0..3)
-                      i++;
-                      int spaceCount = 0;
-                      while (i < pattern.size() && spaceCount < 3 && pattern[i] == ' ') { i++; spaceCount++; }
-                      // If number run, greedily consume digits
-                      if (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) {
-                        while (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) j++;
-                        continue;
-                      }
-                      unsigned char c = static_cast<unsigned char>(text[j]);
-                      int adv = (c & 0x80) == 0 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : 4;
-                      j += adv;
-                    } else {
-                      if (pattern[i] != text[j]) return false;
-                      i++; j++;
-                    }
-                  }
-                  if (i == pattern.size() && j == text.size()) return true;
-                  if (j == text.size()) {
-                    while (i < pattern.size()) {
-                      if (pattern[i] != '?') return false;
-                      i++;
-                      int spaceCount = 0; while (i < pattern.size() && spaceCount < 3 && pattern[i] == ' ') { i++; spaceCount++; }
-                    }
-                    return true;
-                  }
-                  return false;
+                  return templateMatchesMessage(pattern, text);
                 };
                 auto patternsEquivalent = [&](const std::string& a, const std::string& b){
                   return matchesTemplate(a,b) && matchesTemplate(b,a);
@@ -988,30 +957,13 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 // Если прямого совпадения шаблона нет, попробуем адаптивно слить по Левенштейну (<= accuracy)
                 if (groupIds.empty()) {
                   auto mergeWithPattern = [&](const std::string& pat, const std::string& text){
-                    std::string a = pat; std::string b = text;
-                    std::string ops = levensteinOps(a, b);
-                    int diffs = 0; for (char c: ops) if (c != '=') diffs++;
-                    size_t maxLen = std::max(a.size(), b.size());
-                    if (maxLen == 0) return std::pair<bool,std::string>(false, std::string());
-                    float ndist = (float)diffs / (float)maxLen;
-                    if (ndist > configSender.accuracy) return std::pair<bool,std::string>(false, std::string());
-                    // Сформировать объединённый шаблон
-                    std::string out; out.reserve(maxLen);
-                    size_t ia = 0, ib = 0;
-                    for (char op : ops) {
-                      if (op == '=') {
-                        char ca = a[ia], cb = b[ib];
-                        if (ca == '?' || cb == '?') out.push_back('?'); else out.push_back(ca);
-                        ia++; ib++;
-                      } else if (op == '!') {
-                        out.push_back('?'); ia++; ib++;
-                      } else if (op == '+') { // insertion in a
-                        out.push_back('?'); ib++;
-                      } else if (op == '-') { // deletion from a
-                        out.push_back('?'); ia++;
-                      }
-                    }
-                    return std::pair<bool,std::string>(true, out);
+                    if (messageTokenDistance(pat, text) > configSender.accuracy)
+                      return std::pair<bool,std::string>(false, std::string());
+                    bool multibyteChanged = false;
+                    std::string merged = mergeMessageTemplates(pat, text, &multibyteChanged);
+                    if (configSender.dont_approximate_multibyte && multibyteChanged)
+                      return std::pair<bool,std::string>(false, std::string());
+                    return std::pair<bool,std::string>(true, merged);
                   };
                   for (const auto& hm : recent) {
                     if (!hm.isGroup || hm.groupPattern.empty()) continue;
