@@ -46,6 +46,9 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       TgBot::InlineKeyboardMarkup::Ptr info = zworker::createMenu(zworker::Menu::INFO, zabbix);
       mainMenu                              = main;
       infoMenu                              = info;
+      if (!zabbix.getSessionError().empty())
+        zbot::log.write(ZLogger::LogLevel::WARNING,
+                        "Zabbix: " + zabbix.getSessionError() + ", graphs are not available");
       break;
     } catch (ZZabbixException& e) {
       std::string err = "Zabbix exception: ";

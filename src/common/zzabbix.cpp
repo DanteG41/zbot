@@ -109,18 +109,83 @@ const ptree& ZZabbix::getResult(const ptree& response) const {
   return *result;
 }
 
-std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
-  std::ostringstream buf;
-  id_++;
-  pt.put("jsonrpc", "2.0");
-  pt.put("id", id_);
-  if (!authToken_.empty()) pt.put("auth", authToken_);
-  write_json(buf, pt, false);
+static std::string urlEncode(const std::string& value) {
+  static const char* hex = "0123456789ABCDEF";
+  std::string encoded;
 
+  for (unsigned char c : value) {
+    if (isalnum(c) or c == '-' or c == '_' or c == '.' or c == '~') {
+      encoded.push_back(c);
+    } else {
+      encoded.push_back('%');
+      encoded.push_back(hex[c >> 4]);
+      encoded.push_back(hex[c & 0x0F]);
+    }
+  }
+  return encoded;
+}
+
+static std::string statusLine(const std::string& response) {
+  size_t end = response.find("\r\n");
+  return end == std::string::npos ? response.substr(0, 64) : response.substr(0, end);
+}
+
+/* Collect the cookies the answer sets, skipping the ones it deletes. */
+static std::vector<std::string> parseCookies(const std::string& response) {
+  static const std::regex exp("Set-Cookie: *([^=;\r\n]+)=([^;\r\n]*)", std::regex::icase);
+  std::vector<std::string> cookies;
+
+  for (std::sregex_iterator it(response.begin(), response.end(), exp), last; it != last; ++it) {
+    std::string name  = (*it)[1];
+    std::string value = (*it)[2];
+
+    if (value.empty() or value == "deleted") continue;
+    cookies.push_back(name + "=" + value);
+  }
+  return cookies;
+}
+
+/* The web interface names the session cookie zbx_sessionid up to Zabbix 5.0 and
+zbx_session in the newer versions, where the value is no longer a plain hex id. */
+static std::string findSessionCookie(const std::vector<std::string>& cookies) {
+  for (const std::string& cookie : cookies) {
+    if (cookie.compare(0, 11, "zbx_session") == 0) return cookie;
+  }
+  return std::string();
+}
+
+static std::string cookieNames(const std::vector<std::string>& cookies) {
+  std::string names;
+
+  for (const std::string& cookie : cookies) {
+    if (!names.empty()) names += ", ";
+    names += cookie.substr(0, cookie.find('='));
+  }
+  return names.empty() ? "none" : names;
+}
+
+/* Read the value of a hidden form field, used for the csrf token that the login
+form carries since Zabbix 6.4. */
+static std::string findInputValue(const std::string& html, const std::string& name) {
+  std::smatch sm;
+  std::regex byName("name=[\"']" + name + "[\"'][^>]*value=[\"']([^\"']*)[\"']");
+  std::regex byValue("value=[\"']([^\"']*)[\"'][^>]*name=[\"']" + name + "[\"']");
+
+  if (std::regex_search(html, sm, byName)) return sm[1];
+  if (std::regex_search(html, sm, byValue)) return sm[1];
+  return std::string();
+}
+
+/* One TLS request to zabbix. The whole answer is returned, headers included, so
+that the caller can look at the status line and at the cookies. */
+std::string ZZabbix::sendWebRequest(TgBot::Url& url, const std::string& payload,
+                                    const std::string& contentType,
+                                    const std::vector<std::string>& cookies) {
   std::string response;
+
   try {
     tcp::resolver resolver(ioService_);
-    tcp::resolver::query query(zabbixjsonrpc_.host, "443");
+    tcp::resolver::query query(url.host, "443");
     ssl::context context(ssl::context::tlsv12_client);
     context.set_default_verify_paths();
     ssl::stream<tcp::socket> socket(ioService_, context);
@@ -128,10 +193,10 @@ std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
     socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
     socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
     socket.set_verify_mode(ssl::verify_none);
-    socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
+    socket.set_verify_callback(ssl::rfc2818_verification(url.host));
     socket.handshake(ssl::stream<tcp::socket>::client);
 
-    std::string request = generateRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc", false);
+    std::string request = generateRequest(url, payload, contentType, false, cookies);
     write(socket, buffer(request.c_str(), request.length()));
 
     char buff[65536];
@@ -141,9 +206,21 @@ std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
       response += std::string(buff, bytes);
     }
   } catch (std::exception& e) {
-    throw ZZabbixException("unable to reach zabbix on " + zabbixjsonrpc_.host + ": " + e.what());
+    throw ZZabbixException("unable to reach zabbix on " + url.host + ": " + e.what());
   }
-  return ZZabbix::extractBody(response);
+  return response;
+}
+
+std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
+  std::ostringstream buf;
+  id_++;
+  pt.put("jsonrpc", "2.0");
+  pt.put("id", id_);
+  if (!authToken_.empty()) pt.put("auth", authToken_);
+  write_json(buf, pt, false);
+
+  return ZZabbix::extractBody(sendWebRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc",
+                                             std::vector<std::string>()));
 }
 
 bool ZZabbix::auth() {
@@ -168,50 +245,47 @@ bool ZZabbix::auth() {
 
   authToken_ = ZZabbix::getResult(response).get_value<std::string>();
 
-  getSession();
+  /* Only the graph download needs a web session, so a failure here must not keep
+  the bot from starting. The reason is kept for the caller to report. */
+  sessionError_.clear();
+  try {
+    getSession();
+  } catch (ZZabbixException& e) {
+    sessionError_ = e.getError();
+  }
   getApiVersion();
 
   return true;
 }
 
 void ZZabbix::getSession() {
-  std::string payload;
-  payload += "name=";
-  payload += user_;
-  payload += "&password=";
-  payload += password_;
-  payload += "&enter=Sign+in";
+  /* Since Zabbix 6.4 the login form carries a csrf token, and the form itself
+  sets the cookie the token belongs to, so the page has to be fetched before the
+  credentials can be posted. Older versions simply ignore the extra field. */
+  std::vector<std::string> empty;
+  std::string form                 = sendWebRequest(zabbixlogin_, "", "", empty);
+  std::vector<std::string> cookies = parseCookies(form);
+  std::string token                = findInputValue(form, "_csrf_token");
 
-  tcp::resolver resolver(ioService_);
-  tcp::resolver::query query(zabbixlogin_.host, "443");
-  ssl::context context(ssl::context::tlsv12_client);
-  context.set_default_verify_paths();
-  ssl::stream<tcp::socket> socket(ioService_, context);
-  connect(socket.lowest_layer(), resolver.resolve(query));
-  socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
-  socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
-  socket.set_verify_mode(ssl::verify_none);
-  socket.set_verify_callback(ssl::rfc2818_verification(zabbixlogin_.host));
-  socket.handshake(ssl::stream<tcp::socket>::client);
+  std::string payload = "name=" + urlEncode(user_) + "&password=" + urlEncode(password_) +
+                        "&enter=" + urlEncode("Sign in");
 
-  std::string request =
-      generateRequest(zabbixlogin_, payload, "application/x-www-form-urlencoded", false);
-  write(socket, buffer(request.c_str(), request.length()));
+  if (!token.empty()) payload += "&_csrf_token=" + urlEncode(token);
 
-  std::string response;
-  char buff[65536];
-  boost::system::error_code error;
-  while (!error) {
-    size_t bytes = read(socket, buffer(buff), error);
-    response += std::string(buff, bytes);
-  }
-  std::smatch sm;
-  std::regex exp("(zbx_sessionid=[a-f0-9]{32})");
-  if (std::regex_search(response, sm, exp)) {
-    zbxSessionid_ = sm[0];
-  } else {
-    throw ZZabbixException("unable to log in zabbix");
-  }
+  std::string answer =
+      sendWebRequest(zabbixlogin_, payload, "application/x-www-form-urlencoded", cookies);
+  std::vector<std::string> answerCookies = parseCookies(answer);
+  std::string session                    = findSessionCookie(answerCookies);
+
+  /* A successful login redirects to the frontend. It may keep the cookie the
+  login page has set instead of sending a new one. */
+  if (session.empty() and answer.find("\r\nLocation:") != std::string::npos)
+    session = findSessionCookie(cookies);
+  if (session.empty())
+    throw ZZabbixException("unable to log in zabbix web interface, answer: " + statusLine(answer) +
+                           ", cookies: " + cookieNames(answerCookies) +
+                           (token.empty() ? ", no csrf token in the form" : ""));
+  zbxSessionid_ = session;
 }
 
 void ZZabbix::getApiVersion() {
@@ -233,28 +307,8 @@ void ZZabbix::getApiVersion() {
   sbuf = buf.str();
   boost::replace_all(sbuf, "[\"\"]", "[]");
 
-  tcp::resolver resolver(ioService_);
-  tcp::resolver::query query(zabbixjsonrpc_.host, "443");
-  ssl::context context(ssl::context::tlsv12_client);
-  context.set_default_verify_paths();
-  ssl::stream<tcp::socket> socket(ioService_, context);
-  connect(socket.lowest_layer(), resolver.resolve(query));
-  socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
-  socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
-  socket.set_verify_mode(ssl::verify_none);
-  socket.set_verify_callback(ssl::rfc2818_verification(zabbixjsonrpc_.host));
-  socket.handshake(ssl::stream<tcp::socket>::client);
-
-  std::string request = generateRequest(zabbixjsonrpc_, sbuf, "application/json-rpc", false);
-  write(socket, buffer(request.c_str(), request.length()));
-
-  std::string response;
-  char buff[65536];
-  boost::system::error_code error;
-  while (!error) {
-    size_t bytes = read(socket, buffer(buff), error);
-    response += std::string(buff, bytes);
-  }
+  std::string response =
+      sendWebRequest(zabbixjsonrpc_, sbuf, "application/json-rpc", std::vector<std::string>());
   ptree answer = ZZabbix::parseJson(ZZabbix::extractBody(response));
   apiversion_  = ZZabbix::getResult(answer).get_value<std::string>();
 }
@@ -263,37 +317,22 @@ std::vector<std::string> ZZabbix::downloadGraphs(std::vector<std::string> ids) {
   std::time_t time = std::time(nullptr);
   std::vector<std::string> cookies;
   std::vector<std::string> result;
+
+  if (zbxSessionid_.empty())
+    throw ZZabbixException("no zabbix web session: " +
+                           (sessionError_.empty() ? std::string("not logged in") : sessionError_));
   cookies.push_back(zbxSessionid_);
 
-  tcp::resolver resolver(ioService_);
-  tcp::resolver::query query(zabbixlogin_.host, "443");
-  ssl::context context(ssl::context::tlsv12_client);
-  context.set_default_verify_paths();
-
   for (std::string id : ids) {
-    ssl::stream<tcp::socket> socket(ioService_, context);
-    connect(socket.lowest_layer(), resolver.resolve(query));
-    socket.lowest_layer().set_option(socket_base::send_buffer_size(65536));
-    socket.lowest_layer().set_option(socket_base::receive_buffer_size(65536));
-    socket.set_verify_mode(ssl::verify_none);
-    socket.set_verify_callback(ssl::rfc2818_verification(zabbixlogin_.host));
-    socket.handshake(ssl::stream<tcp::socket>::client);
     std::string filename = "/tmp/" + id + "_" + std::to_string(time) + ".png";
     zabbixchart2_.query  = "graphid=";
     zabbixchart2_.query += id;
-    zabbixchart2_.query += "&period=3600&isNow=1&width=500&height=100&legend=1";
+    /* chart2.php takes the time range as from and to since Zabbix 3.4, the old
+    period and isNow parameters are ignored. */
+    zabbixchart2_.query += "&from=now-1h&to=now&width=500&height=100&legend=1";
 
-    std::string request =
-        generateRequest(zabbixchart2_, "", "application/x-www-form-urlencoded", false, cookies);
-    write(socket, buffer(request.c_str(), request.length()));
-
-    std::string response;
-    char buff[65536];
-    boost::system::error_code error;
-    while (!error) {
-      size_t bytes = read(socket, buffer(buff), error);
-      response += std::string(buff, bytes);
-    }
+    std::string response =
+        sendWebRequest(zabbixchart2_, "", "application/x-www-form-urlencoded", cookies);
     std::ofstream graphimg;
     graphimg.open(filename);
     graphimg << ZZabbix::extractBody(response);
@@ -487,11 +526,11 @@ std::string ZZabbix::getMaintenanceName(std::string id) {
   request.put("method", "maintenance.get");
   request.put("params.maintenanceids", id);
   request.add_child("params.output", params);
-  std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
   for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
+  return std::string();
 }
 
 std::string ZZabbix::getScreenName(std::string id) {
@@ -502,11 +541,11 @@ std::string ZZabbix::getScreenName(std::string id) {
   request.put("method", "screen.get");
   request.put("params.screenids", id);
   request.add_child("params.output", params);
-  std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
   for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
+  return std::string();
 }
 
 std::string ZZabbix::getActionName(std::string id) {
@@ -517,11 +556,11 @@ std::string ZZabbix::getActionName(std::string id) {
   request.put("method", "action.get");
   request.put("params.actionids", id);
   request.add_child("params.output", params);
-  std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
   for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
+  return std::string();
 }
 
 std::string ZZabbix::getHostGrpName(std::string id) {
@@ -532,11 +571,11 @@ std::string ZZabbix::getHostGrpName(std::string id) {
   request.put("method", "hostgroup.get");
   request.put("params.groupids", id);
   request.add_child("params.output", params);
-  std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
   for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("name");
   }
+  return std::string();
 }
 
 std::string ZZabbix::getEvent(std::string id) {
@@ -549,11 +588,11 @@ std::string ZZabbix::getEvent(std::string id) {
   request.put("params.sortfield", "clock");
   request.put("params.sortorder", "DESC");
   request.add_child("params.output", params);
-  std::cout << sendRequest(request);
   response = ZZabbix::parseJson(sendRequest(request));
   for (ptree::value_type const& v : ZZabbix::getResult(response)) {
     return v.second.get<std::string>("eventid");
   }
+  return std::string();
 }
 
 std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int filter, int limit) {

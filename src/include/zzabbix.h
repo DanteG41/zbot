@@ -10,6 +10,7 @@ private:
   const char *user_, *password_, *server_;
   std::string authToken_;
   std::string zbxSessionid_;
+  std::string sessionError_;
   std::string apiversion_;
   TgBot::Url zabbixjsonrpc_;
   TgBot::Url zabbixlogin_;
@@ -19,6 +20,9 @@ private:
   void getSession();
   void getApiVersion();
   std::string sendRequest(boost::property_tree::ptree& pt);
+  std::string sendWebRequest(TgBot::Url& url, const std::string& payload,
+                             const std::string& contentType,
+                             const std::vector<std::string>& cookies);
   std::string generateRequest(TgBot::Url& url, const std::string& payload, std::string contentType,
                               bool isKeepAlive,
                               std::vector<std::string> cookies = std::vector<std::string>());
@@ -33,6 +37,7 @@ public:
         zabbixlogin_(s + std::string("index.php")), zabbixchart2_(s + std::string("chart2.php")),
         user_(u), password_(p){};
   bool auth();
+  const std::string& getSessionError() const { return sessionError_; }
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getActions(int status, int limit = 100);
   std::vector<std::pair<std::string, std::string>> getProblems(int group, int limit = 100);
