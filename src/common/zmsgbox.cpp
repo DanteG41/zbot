@@ -327,8 +327,30 @@ bool templateMatchesMessage(const std::string& pattern, const std::string& text)
   return matched[n][m];
 }
 
-std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
-                                                bool dont_approximate_multibyte) {
+static const char* const groupHeader = " similar messages received:\n";
+
+std::string formatMessageGroup(const std::string& pattern, int count) {
+  if (count < 2) return pattern;
+  return std::to_string(count) + groupHeader + pattern;
+}
+
+bool parseMessageGroup(const std::string& text, std::string& pattern, int& count) {
+  const std::string header = groupHeader;
+  size_t digits            = 0;
+
+  while (digits < text.size() and isdigit(static_cast<unsigned char>(text[digits]))) digits++;
+  if (digits == 0 or digits > 9 or text.compare(digits, header.size(), header) != 0) {
+    pattern = text;
+    count   = 1;
+    return false;
+  }
+  count   = std::stoi(text.substr(0, digits));
+  pattern = text.substr(digits + header.size());
+  return true;
+}
+
+std::vector<MessageGroup> ZMsgBox::grouping(float accuracy, float spread,
+                                            bool dont_approximate_multibyte) {
   struct group {
     size_t representative; /* distances are measured against the first message of the
                            group, never against its template, so that a group cannot
@@ -337,7 +359,7 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
     int count;
   };
   std::vector<group> groups;
-  std::vector<std::string> result;
+  std::vector<MessageGroup> result;
 
   for (size_t m = 0; m < messages_.size(); m++) {
     const std::string& message = messages_[m];
@@ -391,10 +413,22 @@ std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
   }
 
   for (const group& g : groups) {
-    if (g.count > 1)
-      result.push_back(std::to_string(g.count) + " similar messages were received:\n" + g.pattern);
-    else
-      result.push_back(messages_[g.representative]);
+    MessageGroup out;
+    /* A group of one is the message itself, an approximated template would only
+    make it harder to read. */
+    out.pattern = g.count > 1 ? g.pattern : messages_[g.representative];
+    out.sample  = messages_[g.representative];
+    out.count   = g.count;
+    result.push_back(out);
   }
+  return result;
+}
+
+std::vector<std::string> ZMsgBox::approximation(float accuracy, float spread,
+                                                bool dont_approximate_multibyte) {
+  std::vector<std::string> result;
+
+  for (const MessageGroup& g : grouping(accuracy, spread, dont_approximate_multibyte))
+    result.push_back(formatMessageGroup(g.pattern, g.count));
   return result;
 }

@@ -16,6 +16,7 @@ struct HistoryMessage {
   std::chrono::system_clock::time_point ts;
   bool isGroup = false;
   std::string groupPattern;
+  std::string sample; // one of the messages the group was built from
   int groupCount = 1;
 };
 
@@ -24,7 +25,8 @@ public:
   ZMessageHistory() = default;
 
   void addMessage(int64_t chatId, int32_t messageId, const std::string& text,
-                  bool isGroup = false, const std::string& pattern = std::string(), int count = 1);
+                  bool isGroup = false, const std::string& pattern = std::string(), int count = 1,
+                  const std::string& sample = std::string());
 
   std::vector<HistoryMessage> getRecentMessages(int64_t chatId, int maxCount, int maxAgeMinutes);
 

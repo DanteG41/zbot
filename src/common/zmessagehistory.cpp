@@ -2,7 +2,8 @@
 #include <algorithm>
 
 void ZMessageHistory::addMessage(int64_t chatId, int32_t messageId, const std::string& text,
-                                 bool isGroup, const std::string& pattern, int count) {
+                                 bool isGroup, const std::string& pattern, int count,
+                                 const std::string& sample) {
   std::lock_guard<std::mutex> lk(mtx_);
   HistoryMessage hm;
   hm.chatId = chatId;
@@ -12,6 +13,7 @@ void ZMessageHistory::addMessage(int64_t chatId, int32_t messageId, const std::s
   hm.isGroup = isGroup;
   hm.groupPattern = pattern;
   hm.groupCount = count;
+  hm.sample = sample.empty() ? text : sample;
   perChat_[chatId].push_back(std::move(hm));
 }
 

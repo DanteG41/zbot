@@ -80,7 +80,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       std::string messageText;
       bool notify = false;
       if (callback->data == "main") {
-        bot.getApi().editMessageText("*Selecting an action:*", callback->message->chat->id,
+        bot.getApi().editMessageText("*Select an action:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, mainMenu);
       } else if (callback->data == "info") {
@@ -107,7 +107,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
                                      "Markdown", false, maintenanceMenu);
       } else if (callback->data == "getchatid") {
         std::string response;
-        response = "Chatid: " + std::to_string(callback->message->chat->id);
+        response = "Chat ID: " + std::to_string(callback->message->chat->id);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, response);
       } else if (callback->data == "userlist") {
@@ -115,26 +115,26 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         for (std::string s : configBot.adminUsers) {
           users += s + "\n";
         }
-        response = "Users: \n" + users;
+        response = "Admin users:\n" + users;
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
         bot.getApi().sendMessage(callback->message->chat->id, response);
       } else if (callback->data == "createmaintenance") {
         TgBot::InlineKeyboardMarkup::Ptr maintenanceMenuSelectHostGrp =
             zworker::createMenu(zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix);
-        bot.getApi().editMessageText("*Maintenance/Select Host group:*",
+        bot.getApi().editMessageText("*Maintenance / select a host group:*",
                                      callback->message->chat->id, callback->message->messageId,
                                      callback->inlineMessageId, "Markdown", false,
                                      maintenanceMenuSelectHostGrp);
       } else if (callback->data == "action.enable") {
         TgBot::InlineKeyboardMarkup::Ptr actionEnableSelect =
             zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix);
-        bot.getApi().editMessageText("*Actions/Select disabled:*", callback->message->chat->id,
+        bot.getApi().editMessageText("*Actions / disabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, actionEnableSelect);
       } else if (callback->data == "action.disable") {
         TgBot::InlineKeyboardMarkup::Ptr actionDisableSelect =
             zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix);
-        bot.getApi().editMessageText("*Actions/Select enabled:*", callback->message->chat->id,
+        bot.getApi().editMessageText("*Actions / enabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, actionDisableSelect);
       } else if (callback->data.compare(0, 18, "action.enable.page") == 0) {
@@ -142,7 +142,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
         TgBot::InlineKeyboardMarkup::Ptr actionEnableSelect =
             zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix, std::stoi(callbackData[1]));
-        bot.getApi().editMessageText("*Actions/Select disabled:*", callback->message->chat->id,
+        bot.getApi().editMessageText("*Actions / disabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, actionEnableSelect);
       } else if (callback->data.compare(0, 19, "action.disable.page") == 0) {
@@ -150,7 +150,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
         TgBot::InlineKeyboardMarkup::Ptr actionDisableSelect =
             zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix, std::stoi(callbackData[1]));
-        bot.getApi().editMessageText("*Actions/Select enabled:*", callback->message->chat->id,
+        bot.getApi().editMessageText("*Actions / enabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
                                      "Markdown", false, actionDisableSelect);
       } else if (callback->data.compare(0, 15, "action.disable ") == 0) {
@@ -160,8 +160,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
           bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
           zabbix.updateStatusAction(callbackData[1], 1);
           notify      = true;
-          messageText = "User @" + callback->from->username + " disabled action: \"" +
-                        zabbix.getActionName(callbackData[1]) + "\"";
+          messageText = "User @" + callback->from->username + " disabled the action \"" +
+                        zabbix.getActionName(callbackData[1]) + "\".";
           bot.getApi().sendMessage(callback->message->chat->id, messageText);
         } catch (ZZabbixException& e) {
           bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
@@ -173,8 +173,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
           bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
           zabbix.updateStatusAction(callbackData[1], 0);
           notify      = true;
-          messageText = "User @" + callback->from->username + " enabled action: \"" +
-                        zabbix.getActionName(callbackData[1]) + "\"";
+          messageText = "User @" + callback->from->username + " enabled the action \"" +
+                        zabbix.getActionName(callbackData[1]) + "\".";
           bot.getApi().sendMessage(callback->message->chat->id, messageText);
         } catch (ZZabbixException& e) {
           bot.getApi().sendMessage(callback->message->chat->id, std::string(e.getError()));
@@ -187,7 +187,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         std::ofstream trigger(triggerPath);
         notify = true;
         messageText =
-            "User @" + callback->from->username + " disabled sending messages for all chats.";
+            "User @" + callback->from->username + " paused sending in all chats.";
         bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.stopchat") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
@@ -198,8 +198,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         std::ofstream trigger(triggerPath);
         notify      = true;
         messageText = "User @" + callback->from->username +
-                      " disabled sending messages for chat: " + callback->message->chat->title +
-                      callback->message->chat->firstName;
+                      " paused sending in the chat: " + callback->message->chat->title +
+                      callback->message->chat->firstName + ".";
         bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.startall") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
@@ -209,7 +209,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         unlink(triggerPath.c_str());
         notify = true;
         messageText =
-            "User @" + callback->from->username + " enabled sending messages for all chats.";
+            "User @" + callback->from->username + " resumed sending in all chats.";
         bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data == "action.startchat") {
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
@@ -221,15 +221,15 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         unlink(triggerPath.c_str());
         notify      = true;
         messageText = "User @" + callback->from->username +
-                      " enabled sending messages for chat: " + callback->message->chat->title +
-                      callback->message->chat->firstName;
+                      " resumed sending in the chat: " + callback->message->chat->title +
+                      callback->message->chat->firstName + ".";
         bot.getApi().sendMessage(callback->message->chat->id, messageText);
       } else if (callback->data.compare(0, 34, "maintenance.create.select.grp.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
         TgBot::InlineKeyboardMarkup::Ptr maintenanceMenuSelectHostGrp = zworker::createMenu(
             zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix, std::stoi(callbackData[1]));
-        bot.getApi().editMessageText("*Maintenance/Select Host group:*",
+        bot.getApi().editMessageText("*Maintenance / select a host group:*",
                                      callback->message->chat->id, callback->message->messageId,
                                      callback->inlineMessageId, "Markdown", false,
                                      maintenanceMenuSelectHostGrp);
@@ -242,7 +242,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         event.callback = callbackData;
         waitEvent.push_back(event);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-        bot.getApi().sendMessage(callback->message->chat->id, "Input maintenance name:");
+        bot.getApi().sendMessage(callback->message->chat->id, "Send the name of the maintenance period:");
       } else if (callback->data.compare(0, 14, "screen.select ") == 0 ||
                  callback->data.compare(0, 22, "screen.select.refresh ") == 0) {
         std::vector<std::string> callbackData, images;
@@ -268,7 +268,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
 
           if (images.size() == 0)
             bot.getApi().sendMessage(callback->message->chat->id,
-                                     "No graphs on the selected complex screen.");
+                                     "The selected screen has no graphs.");
 
           for (std::vector<std::string>::iterator it = images.begin(); it != images.end(); it++) {
             auto graph(std::make_shared<TgBot::InputMediaPhoto>());
@@ -396,7 +396,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         event.callback = callbackData;
         waitEvent.push_back(event);
         bot.getApi().deleteMessage(callback->message->chat->id, callback->message->messageId);
-        bot.getApi().sendMessage(callback->message->chat->id, "Input acknowledge text:");
+        bot.getApi().sendMessage(callback->message->chat->id, "Send the text of the acknowledgement:");
       }
       if (notify) {
         for (std::string s : configBot.notifyChats) {
@@ -416,10 +416,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       access = true;
     if (access) {
       if (configBot.adminUsers.count(message->from->username)) {
-        bot.getApi().sendMessage(message->chat->id, "*Selecting an action:*", false, 0, mainMenu,
+        bot.getApi().sendMessage(message->chat->id, "*Select an action:*", false, 0, mainMenu,
                                  "MarkDown");
       } else {
-        bot.getApi().sendMessage(message->chat->id, "Access denied");
+        bot.getApi().sendMessage(message->chat->id, "Access denied.");
       }
     }
   });
@@ -696,7 +696,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     std::vector<TgBot::InlineKeyboardButton::Ptr> inforow;
     std::vector<TgBot::InlineKeyboardButton::Ptr> inforow2;
 
-    getchatid->text         = "Get chatid";
+    getchatid->text         = "Chat ID";
     getchatid->callbackData = "getchatid";
     userlist->text          = "User list";
     userlist->callbackData  = "userlist";
@@ -737,17 +737,17 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     stat(triggerFileForChat.c_str(), &stchat);
 
     if (S_ISREG(stall.st_mode)) {
-      stopall->text         = "Start all messages";
+      stopall->text         = "Resume sending in all chats";
       stopall->callbackData = "action.startall";
     } else {
-      stopall->text         = "Stop all messages";
+      stopall->text         = "Pause sending in all chats";
       stopall->callbackData = "action.stopall";
     }
     if (S_ISREG(stchat.st_mode)) {
-      stopchat->text         = "Start messages in this chat";
+      stopchat->text         = "Resume sending in this chat";
       stopchat->callbackData = "action.startchat";
     } else {
-      stopchat->text         = "Stop messages in this chat";
+      stopchat->text         = "Pause sending in this chat";
       stopchat->callbackData = "action.stopchat";
     }
     back->text         = "Back";
@@ -810,7 +810,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow;
     std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow2;
 
-    create->text         = "Create new maintenance period";
+    create->text         = "Create a maintenance period";
     create->callbackData = "createmaintenance";
     back->text           = "Back";
     back->callbackData   = "main";
@@ -832,7 +832,7 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow1;
     std::vector<TgBot::InlineKeyboardButton::Ptr> maintenancerow2;
 
-    renewButton->text          = "Renew for 1 hour";
+    renewButton->text          = "Extend by 1 hour";
     renewButton->callbackData  = "maintenance.renew " + callback;
     deleteButton->text         = "Delete";
     deleteButton->callbackData = "maintenance.delete " + callback;
@@ -953,17 +953,6 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
               for (const std::string& msg : messages) {
                 auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount, configSender.historyMaxAgeMinutes);
 
-                auto stripHeader = [](const std::string& s) -> std::pair<int,std::string> {
-                  // returns {count, pattern} or {0, s}
-                  size_t i = 0;
-                  while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) i++;
-                  const std::string hdr = " similar messages were received:\n";
-                  if (i > 0 && i + hdr.size() <= s.size() && s.compare(i, hdr.size(), hdr) == 0) {
-                    int cnt = std::stoi(s.substr(0, i));
-                    return {cnt, s.substr(i + hdr.size())};
-                  }
-                  return {0, s};
-                };
                 auto matchesTemplate = [](const std::string& pattern, const std::string& text) {
                   return templateMatchesMessage(pattern, text);
                 };
@@ -972,33 +961,39 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 };
 
                 // 1) Попробовать обновить уже отправленную группу
-                int mergedCount = 1; std::string basePattern; std::vector<int32_t> groupIds;
+                int mergedCount = 1; std::string basePattern, baseSample;
+                std::vector<int32_t> groupIds;
                 for (const auto& hm : recent) {
                   if (!hm.isGroup || hm.groupPattern.empty()) continue;
                   if (matchesTemplate(hm.groupPattern, msg)) {
                     if (basePattern.empty()) basePattern = hm.groupPattern;
                     if (patternsEquivalent(basePattern, hm.groupPattern)) {
                       mergedCount += hm.groupCount;
+                      baseSample = hm.sample;
                       groupIds.push_back(hm.messageId);
                     }
                   }
                 }
                 // Если прямого совпадения шаблона нет, попробуем адаптивно слить по Левенштейну (<= accuracy)
                 if (groupIds.empty()) {
-                  auto mergeWithPattern = [&](const std::string& pat, const std::string& text){
-                    if (messageTokenDistance(pat, text) > configSender.accuracy)
+                  /* The distance is taken between two plain messages, a template
+                  full of wildcards is close to everything. */
+                  auto mergeWithGroup = [&](const HistoryMessage& hm, const std::string& text){
+                    if (hm.sample.empty() ||
+                        messageTokenDistance(hm.sample, text) > configSender.accuracy)
                       return std::pair<bool,std::string>(false, std::string());
                     bool multibyteChanged = false;
-                    std::string merged = mergeMessageTemplates(pat, text, &multibyteChanged);
+                    std::string merged = mergeMessageTemplates(hm.groupPattern, text, &multibyteChanged);
                     if (configSender.dont_approximate_multibyte && multibyteChanged)
                       return std::pair<bool,std::string>(false, std::string());
                     return std::pair<bool,std::string>(true, merged);
                   };
                   for (const auto& hm : recent) {
                     if (!hm.isGroup || hm.groupPattern.empty()) continue;
-                    auto res = mergeWithPattern(hm.groupPattern, msg);
+                    auto res = mergeWithGroup(hm, msg);
                     if (res.first) {
                       basePattern = res.second;
+                      baseSample  = hm.sample;
                       mergedCount = hm.groupCount + 1;
                       groupIds.push_back(hm.messageId);
                       break;
@@ -1008,9 +1003,11 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 if (!groupIds.empty()) {
                   tbot.deleteMessages(chatId, groupIds);
                   history.removeMessages(chatId, groupIds);
-                  std::string groupedText = basePattern + "\n\nSimilar messages received: " + std::to_string(mergedCount);
+                  std::string groupedText = formatMessageGroup(basePattern, mergedCount);
                   auto sent = tbot.sendMessage(chatId, groupedText);
-                  if (sent) history.addMessage(chatId, sent->messageId, groupedText, true, basePattern, mergedCount);
+                  if (sent)
+                    history.addMessage(chatId, sent->messageId, groupedText, true, basePattern,
+                                       mergedCount, baseSample);
                   continue;
                 }
 
@@ -1019,13 +1016,17 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 ZMsgBox box(processingStorage, chat.c_str());
                 box.pushMessage(msg);
                 for (const auto& hm : recent) if (!hm.isGroup) box.pushMessage(hm.text);
-                auto pats = box.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
+                auto pats = box.grouping(configSender.accuracy, configSender.spread,
+                                         configSender.dont_approximate_multibyte);
 
-                int bestCount = 0; std::string bestPattern;
-                for (const auto& pr : pats) {
-                  auto [cnt, pat] = stripHeader(pr);
-                  if (cnt >= 2 && matchesTemplate(pat, msg)) {
-                    if (cnt > bestCount) { bestCount = cnt; bestPattern = pat; }
+                int bestCount = 0; std::string bestPattern, bestSample;
+                for (const MessageGroup& pr : pats) {
+                  if (pr.count >= 2 && matchesTemplate(pr.pattern, msg)) {
+                    if (pr.count > bestCount) {
+                      bestCount   = pr.count;
+                      bestPattern = pr.pattern;
+                      bestSample  = pr.sample;
+                    }
                   }
                 }
 
@@ -1036,21 +1037,67 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                     if (!hm.isGroup && matchesTemplate(bestPattern, hm.text)) toDelete.push_back(hm.messageId);
                   }
                   if (!toDelete.empty()) { tbot.deleteMessages(chatId, toDelete); history.removeMessages(chatId, toDelete); }
-                  std::string groupedText = bestPattern + "\n\nSimilar messages received: " + std::to_string(bestCount);
+                  std::string groupedText = formatMessageGroup(bestPattern, bestCount);
                   auto sent = tbot.sendMessage(chatId, groupedText);
-                  if (sent) history.addMessage(chatId, sent->messageId, groupedText, true, bestPattern, bestCount);
+                  if (sent)
+                    history.addMessage(chatId, sent->messageId, groupedText, true, bestPattern,
+                                       bestCount, bestSample);
                 } else {
                   auto sent = tbot.sendMessage(chatId, msg);
                   if (sent) history.addMessage(chatId, sent->messageId, msg, false);
                 }
               }
             } else {
-              // Legacy batch mode
+              // Batch mode: group what has been collected, then merge every group with
+              // the messages this bot has sent to the chat recently.
+              std::vector<MessageGroup> groups;
+
               if (sendBox.size() > configSender.minapprox) {
-                auto grouped = sendBox.approximation(configSender.accuracy, configSender.spread, configSender.dont_approximate_multibyte);
-                for (const std::string& g : grouped) tbot.send(atoll(chat.c_str()), g);
+                groups = sendBox.grouping(configSender.accuracy, configSender.spread,
+                                          configSender.dont_approximate_multibyte);
               } else {
-                for (const std::string& m : messages) tbot.send(atoll(chat.c_str()), m);
+                for (const std::string& m : messages) groups.push_back({m, m, 1});
+              }
+
+              history.cleanup(configSender.historyMaxAgeMinutes);
+              for (const MessageGroup& group : groups) {
+                std::string pattern = group.pattern;
+                std::string sample  = group.sample;
+                int count           = group.count;
+                std::vector<int32_t> sentIds;
+
+                if (configSender.historyMaxAgeMinutes > 0 && configSender.historyCheckCount > 0) {
+                  auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount,
+                                                          configSender.historyMaxAgeMinutes);
+                  for (const HistoryMessage& hm : recent) {
+                    const std::string& sent = hm.isGroup ? hm.groupPattern : hm.text;
+                    bool multibyteChanged   = false;
+
+                    if (sent.empty() || hm.sample.empty()) continue;
+                    /* Both sides are compared as plain messages. Measuring against
+                    the template instead would let a group full of wildcards absorb
+                    everything that follows. */
+                    if (messageTokenDistance(group.sample, hm.sample) >= configSender.accuracy)
+                      continue;
+                    std::string merged = mergeMessageTemplates(pattern, sent, &multibyteChanged);
+                    if (configSender.dont_approximate_multibyte && multibyteChanged) continue;
+                    pattern = merged;
+                    sample  = hm.sample; // the oldest message of the group stays its anchor
+                    count += hm.groupCount;
+                    sentIds.push_back(hm.messageId);
+                  }
+                }
+
+                // The merged group replaces the messages it absorbed.
+                if (!sentIds.empty()) {
+                  tbot.deleteMessages(chatId, sentIds);
+                  history.removeMessages(chatId, sentIds);
+                }
+                std::string text = formatMessageGroup(pattern, count);
+                auto sent        = tbot.sendMessage(chatId, text);
+                if (sent)
+                  history.addMessage(chatId, sent->messageId, text, count > 1, pattern, count,
+                                     sample);
               }
             }
           } catch (std::exception& e) {
