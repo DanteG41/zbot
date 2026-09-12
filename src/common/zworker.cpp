@@ -512,10 +512,19 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     }
   }
 
+  int failures     = 0;
+  bool dropWebhook = true;
+
   while (true) {
     struct timespec timeout;
     if (configBot.webhook) {
       timeout.tv_sec  = 10;
+      timeout.tv_nsec = 0;
+    } else if (failures) {
+      /* Wait longer after every failure in a row. Retrying at once would open a
+      connection to the api every few milliseconds for as long as it keeps
+      failing. */
+      timeout.tv_sec  = 1 << (failures - 1);
       timeout.tv_nsec = 0;
     } else {
       timeout.tv_sec  = 0;
@@ -540,18 +549,28 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     }
     try {
       if (!configBot.webhook) {
-        bot.getApi().deleteWebhook();
+        /* The webhook has to go before the first poll, and again after a failure
+        in case it was set while this worker was not looking. */
+        if (dropWebhook) {
+          bot.getApi().deleteWebhook();
+          dropWebhook = false;
+        }
         longPoll.start();
       }
+      failures = 0;
     } catch (TgBot::TgException& e) {
       std::string err = "TgBot exception: ";
       err += e.what();
       zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      if (failures < 5) failures++;
+      dropWebhook = true;
       continue;
     } catch (std::exception& e) {
       std::string err = "LongPoll exception: ";
       err += e.what();
       zbot::log.write(ZLogger::LogLevel::ERROR, err);
+      if (failures < 5) failures++;
+      dropWebhook = true;
       continue;
     }
   }
