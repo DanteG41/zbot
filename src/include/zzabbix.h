@@ -27,6 +27,7 @@ private:
                               bool isKeepAlive,
                               std::vector<std::string> cookies = std::vector<std::string>());
   std::string extractBody(const std::string& data) const;
+  std::string toJson(boost::property_tree::ptree& pt) const;
   boost::property_tree::ptree parseJson(const std::string& json) const;
   std::string getErrorMessage(const boost::property_tree::ptree& response) const;
   const boost::property_tree::ptree& getResult(const boost::property_tree::ptree& response) const;
@@ -37,6 +38,8 @@ public:
         zabbixlogin_(s + std::string("index.php")), zabbixchart2_(s + std::string("chart2.php")),
         user_(u), password_(p){};
   bool auth();
+  bool apiAtLeast(int major, int minor) const;
+  const std::string& getApiversion() const { return apiversion_; }
   const std::string& getSessionError() const { return sessionError_; }
   std::vector<std::pair<std::string, std::string>> getMaintenances(int limit = 100);
   std::vector<std::pair<std::string, std::string>> getActions(int status, int limit = 100);

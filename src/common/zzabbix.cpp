@@ -12,6 +12,10 @@ using boost::property_tree::ptree;
 using boost::property_tree::read_json;
 using boost::property_tree::write_json;
 
+/* Markers for the json values that are not strings. */
+static const char* const jsonTrue  = "__zbx_true__";
+static const char* const jsonFalse = "__zbx_false__";
+
 std::string ZZabbix::generateRequest(TgBot::Url& url, const std::string& payload,
                                      std::string contentType, bool isKeepAlive,
                                      std::vector<std::string> cookies) {
@@ -211,16 +215,44 @@ std::string ZZabbix::sendWebRequest(TgBot::Url& url, const std::string& payload,
   return response;
 }
 
-std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
+/* boost::property_tree writes every value as a string, while the api wants real
+json for the flags and for an empty array. Both are put into the tree as a marker
+and turned into json here. */
+std::string ZZabbix::toJson(ptree& pt) const {
   std::ostringstream buf;
+  std::string json;
+
+  write_json(buf, pt, false);
+  json = buf.str();
+  boost::replace_all(json, "\"" + std::string(jsonTrue) + "\"", "true");
+  boost::replace_all(json, "\"" + std::string(jsonFalse) + "\"", "false");
+  boost::replace_all(json, "[\"\"]", "[]");
+  return json;
+}
+
+std::string ZZabbix::sendRequest(boost::property_tree::ptree& pt) {
   id_++;
   pt.put("jsonrpc", "2.0");
   pt.put("id", id_);
   if (!authToken_.empty()) pt.put("auth", authToken_);
-  write_json(buf, pt, false);
 
-  return ZZabbix::extractBody(sendWebRequest(zabbixjsonrpc_, buf.str(), "application/json-rpc",
+  return ZZabbix::extractBody(sendWebRequest(zabbixjsonrpc_, toJson(pt), "application/json-rpc",
                                              std::vector<std::string>()));
+}
+
+/* The version reads as major.minor.patch, an api that is older than the asked
+for version is reported as false. */
+bool ZZabbix::apiAtLeast(int major, int minor) const {
+  size_t dot = apiversion_.find('.');
+
+  if (dot == std::string::npos) return false;
+  try {
+    int apiMajor = std::stoi(apiversion_.substr(0, dot));
+    int apiMinor = std::stoi(apiversion_.substr(dot + 1));
+    return apiMajor > major or (apiMajor == major and apiMinor >= minor);
+  } catch (std::exception&) {
+    return false;
+  }
 }
 
 bool ZZabbix::auth() {
@@ -290,25 +322,18 @@ void ZZabbix::getSession() {
 
 void ZZabbix::getApiVersion() {
   ptree payload, params, child;
-  std::ostringstream buf;
-  std::string sbuf;
 
+  /* apiinfo.version takes no parameters and no authentication, the empty array
+  is written by toJson. */
   params.push_back(std::make_pair("", child));
   payload.put("method", "apiinfo.version");
   payload.add_child("params", params);
-
-  // whole function is a dirty hack, because boost::property_tree::json_parser
-  // cannot create an empty json array like {"params": []}
-
   id_++;
   payload.put("jsonrpc", "2.0");
   payload.put("id", id_);
-  write_json(buf, payload, false);
-  sbuf = buf.str();
-  boost::replace_all(sbuf, "[\"\"]", "[]");
 
-  std::string response =
-      sendWebRequest(zabbixjsonrpc_, sbuf, "application/json-rpc", std::vector<std::string>());
+  std::string response = sendWebRequest(zabbixjsonrpc_, toJson(payload), "application/json-rpc",
+                                        std::vector<std::string>());
   ptree answer = ZZabbix::parseJson(ZZabbix::extractBody(response));
   apiversion_  = ZZabbix::getResult(answer).get_value<std::string>();
 }
@@ -452,7 +477,7 @@ void ZZabbix::ackProblem(std::string id, std::string message) {
   ptree groupids, timeperiods;
   ptree groupidChild, timeperiodChild;
 
-  if (int(apiversion_[1]) >= 4) {
+  if (apiAtLeast(4, 0)) {
     /*  "params.action" is bitmask field, any combination of values is acceptable
         Possible values:
         1 - close problem;
@@ -608,7 +633,9 @@ std::vector<std::pair<std::string, std::string>> ZZabbix::getHostGrp(int filter,
   }
   request.put("method", "hostgroup.get");
   request.put("params.sortfield", "name");
-  request.put("params.monitored_hosts", "1");
+  /* The flag was renamed in Zabbix 6.0 and has to be a json boolean. */
+  request.put(apiAtLeast(6, 0) ? "params.with_monitored_hosts" : "params.monitored_hosts",
+              jsonTrue);
   request.add_child("params.output", params);
 
   response = ZZabbix::parseJson(sendRequest(request));

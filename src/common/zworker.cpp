@@ -714,7 +714,9 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
     mainrow1.push_back(info);
     mainrow1.push_back(maintenance);
     mainrow2.push_back(actions);
-    mainrow2.push_back(screen);
+    /* Screens were dropped from Zabbix in 5.4 and replaced with dashboards, the
+    api has no screen method there. */
+    if (!zabbix.apiAtLeast(5, 4)) mainrow2.push_back(screen);
     mainrow3.push_back(problems);
     mainMenu->inlineKeyboard.push_back(mainrow1);
     mainMenu->inlineKeyboard.push_back(mainrow2);
