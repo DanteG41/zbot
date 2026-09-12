@@ -6,6 +6,8 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <fcntl.h>
+#include <sys/file.h>
 
 // Forward declaration from zmsgbox.cpp
 
@@ -486,6 +488,35 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       });
 
   TgBot::TgLongPoll longPoll(bot, 100, 10);
+
+  /* A restart brings this worker up while the previous one may still sit inside
+  a long poll, and telegram answers the younger of two polls with a conflict. The
+  lock is held for as long as a worker polls, so waiting for it costs nothing on
+  a cold start and exactly the life of the previous worker on a restart. */
+  if (!configBot.webhook) {
+    std::string storagePath;
+    zbot::mainConfig.getParam("storage", storagePath);
+    int lock = open((storagePath + "/bot.lock").c_str(), O_CREAT | O_RDWR, 0660);
+
+    if (lock < 0) {
+      zbot::log.write(ZLogger::LogLevel::WARNING,
+                      "zbotd: unable to open " + storagePath + "/bot.lock");
+    } else {
+      struct timespec second = {1, 0};
+      for (int waited = 0; flock(lock, LOCK_EX | LOCK_NB) != 0; waited++) {
+        if (!waited) zbot::log << "zbotd: waiting for the previous bot worker to stop";
+        if (waited >= 30) {
+          zbot::log.write(ZLogger::LogLevel::WARNING,
+                          "zbotd: the previous bot worker is still polling, starting anyway");
+          break;
+        }
+        if (sigtimedwait(&sigset, &siginfo, &second) > 0 and siginfo.si_signo == SIGTERM) {
+          zbot::log << "zbotd: stop bot worker by signal SIGTERM";
+          return zbot::ChildSignal::CHILD_TERMINATE;
+        }
+      }
+    }
+  }
 
   if (configBot.webhook) {
     TgBot::TgWebhookTcpServer webhookServer(configBot.webhookBindPort, configBot.webhookPath,
