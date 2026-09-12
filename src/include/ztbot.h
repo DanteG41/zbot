@@ -2,6 +2,7 @@
 #define ZTBOT_H
 
 #include <tgbot/tgbot.h>
+#include <zhttpclient.h>
 
 class Ztbot {
 private:
@@ -9,8 +10,8 @@ private:
   TgBot::Bot bot;
 
 public:
-  Ztbot(const char* t) : bot(t){};
-  Ztbot(std::string t) : bot(t.c_str()){};
+  Ztbot(const char* t) : bot(t, zbot::httpClient()){};
+  Ztbot(std::string t) : bot(t.c_str(), zbot::httpClient()){};
   void send(int64_t c, std::string m);
   TgBot::Message::Ptr sendMessage(int64_t c, const std::string& m) { return bot.getApi().sendMessage(c, m); }
   bool deleteMessage(int64_t chatId, int32_t messageId) {

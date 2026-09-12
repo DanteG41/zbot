@@ -4,6 +4,7 @@ set(SOURCES hirschberg.cpp
 	zconfig.cpp
 	zinit.cpp
 	zworker.cpp
+	zhttpclient.cpp
 	zlogger.cpp
 	zmsgbox.cpp
 	zstorage.cpp

@@ -69,7 +69,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
     }
   }
 
-  TgBot::Bot bot(configBot.token);
+  TgBot::Bot bot(configBot.token, zbot::httpClient());
   std::string webhookUrl = "https://";
   webhookUrl += configBot.webhookPublicHost;
   webhookUrl += configBot.webhookPath;
