@@ -43,11 +43,12 @@ void ZMsgBox::load(int maxMessage) {
   struct stat st;
   std::string fullpath;
 
+  if (dirp == NULL) throw ZStorageException("unable to read the directory " + path_);
   for (int i = 0; (dp = readdir(dirp)) != NULL and i < maxMessage; i++) {
     std::string message;
     char c;
     fullpath = path_ + "/" + dp->d_name;
-    stat(fullpath.c_str(), &st);
+    if (stat(fullpath.c_str(), &st) != 0) continue;
     if (S_ISREG(st.st_mode)) {
       if (std::string(dp->d_name) == "sending_off") continue;
       std::ifstream msgFile;
