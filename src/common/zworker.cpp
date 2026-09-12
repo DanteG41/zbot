@@ -955,6 +955,28 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
   ZStorage processingStorage(configSender.path + "/processing");
   Ztbot tbot(configSender.token);
   ZMessageHistory history;
+  std::set<std::string> paused;
+
+  /* Messages taken from the queue but never sent, because the worker was stopped
+  in the middle of a cycle, would sit in the processing directory for good. */
+  try {
+    for (const std::string& chat : processingStorage.listChats()) {
+      int returned = 0;
+      for (int pass = 0; pass < 100; pass++) {
+        ZMsgBox stranded(processingStorage, chat.c_str());
+        stranded.load(configSender.maxmessages);
+        if (!stranded.size()) break;
+        returned += stranded.size();
+        stranded.move(pendingStorage);
+      }
+      if (returned)
+        zbot::log.write(ZLogger::LogLevel::WARNING,
+                        "zbotd: returned " + std::to_string(returned) +
+                            " unsent messages of the chat " + chat + " to the queue");
+    }
+  } catch (ZStorageException& e) {
+    zbot::log.write(ZLogger::LogLevel::ERROR, e.getError());
+  }
 
   while (true) {
     struct timespec timeout;
@@ -975,7 +997,16 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
     try {
       for (std::string chat : pendingStorage.listChats()) {
         ZMsgBox sendBox(pendingStorage, chat.c_str());
-        if (!zbotStorage.checkTrigger() || !sendBox.checkTrigger()) sendBox.disable();
+        /* Report the pause once, not on every cycle. */
+        if (!zbotStorage.checkTrigger() || !sendBox.checkTrigger()) {
+          sendBox.disable();
+          if (paused.insert(chat).second)
+            zbot::log.write(ZLogger::LogLevel::WARNING,
+                            "zbotd: sending is paused for the chat " + chat +
+                                ", the messages are dropped");
+        } else if (paused.erase(chat)) {
+          zbot::log << "zbotd: sending resumed for the chat " + chat;
+        }
         sendBox.load(configSender.maxmessages);
         sendBox.move(processingStorage);
         messages = sendBox.popMessages();
@@ -1134,16 +1165,18 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                   }
                 }
 
-                // The merged group replaces the messages it absorbed.
-                if (!sentIds.empty()) {
-                  tbot.deleteMessages(chatId, sentIds);
-                  history.removeMessages(chatId, sentIds);
-                }
+                /* The merged group replaces the messages it absorbed, but only
+                once it is in the chat. Deleting first would leave a hole if the
+                send then failed. */
                 std::string text = formatMessageGroup(pattern, count);
                 auto sent        = tbot.sendMessage(chatId, text);
                 if (sent)
                   history.addMessage(chatId, sent->messageId, text, count > 1, pattern, count,
                                      sample);
+                if (!sentIds.empty()) {
+                  tbot.deleteMessages(chatId, sentIds);
+                  history.removeMessages(chatId, sentIds);
+                }
               }
             }
           } catch (std::exception& e) {
