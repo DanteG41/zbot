@@ -969,6 +969,9 @@ TgBot::InlineKeyboardMarkup::Ptr zworker::createMenu(zworker::Menu menu, ZZabbix
   default:
     break;
   }
+  /* A menu without a case of its own gets an empty keyboard rather than whatever
+  happens to be left where the return value should be. */
+  return std::make_shared<TgBot::InlineKeyboardMarkup>();
 }
 
 void zworker::senderGetParams(ZConfig& tc, zbot::config& c) {
@@ -1067,100 +1070,85 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
             if (configSender.immediateSend) {
               history.cleanup(configSender.historyMaxAgeMinutes);
               for (const std::string& msg : messages) {
-                auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount, configSender.historyMaxAgeMinutes);
+                auto recent = history.getRecentMessages(chatId, configSender.historyCheckCount,
+                                                        configSender.historyMaxAgeMinutes);
+                MessageGroup group;
+                std::vector<int32_t> absorbed;
 
-                auto matchesTemplate = [](const std::string& pattern, const std::string& text) {
-                  return templateMatchesMessage(pattern, text);
-                };
-                auto patternsEquivalent = [&](const std::string& a, const std::string& b){
-                  return matchesTemplate(a,b) && matchesTemplate(b,a);
-                };
+                group.pattern = msg;
+                group.sample  = msg;
+                group.members.push_back(msg);
+                group.first = group.last = std::time(nullptr);
 
-                // 1) Попробовать обновить уже отправленную группу
-                int mergedCount = 1; std::string basePattern, baseSample;
-                std::vector<int32_t> groupIds;
-                for (const auto& hm : recent) {
-                  if (!hm.isGroup || hm.groupPattern.empty()) continue;
-                  if (matchesTemplate(hm.groupPattern, msg)) {
-                    if (basePattern.empty()) basePattern = hm.groupPattern;
-                    if (patternsEquivalent(basePattern, hm.groupPattern)) {
-                      mergedCount += hm.groupCount;
-                      baseSample = hm.sample;
-                      groupIds.push_back(hm.messageId);
-                    }
-                  }
+                // 1) Join the groups already in the chat whose template takes the message
+                std::string basePattern;
+                for (const HistoryMessage& hm : recent) {
+                  if (hm.group.count < 2 || !templateMatchesMessage(hm.group.pattern, msg)) continue;
+                  if (basePattern.empty()) basePattern = hm.group.pattern;
+                  if (!templateMatchesMessage(basePattern, hm.group.pattern) ||
+                      !templateMatchesMessage(hm.group.pattern, basePattern))
+                    continue;
+                  absorbMessageGroup(group, hm.group);
+                  group.sample = hm.group.sample;
+                  absorbed.push_back(hm.messageId);
                 }
-                // Если прямого совпадения шаблона нет, попробуем адаптивно слить по Левенштейну (<= accuracy)
-                if (groupIds.empty()) {
-                  /* The distance is taken between two plain messages, a template
-                  full of wildcards is close to everything. */
-                  auto mergeWithGroup = [&](const HistoryMessage& hm, const std::string& text){
-                    if (hm.sample.empty() ||
-                        messageTokenDistance(hm.sample, text) > configSender.accuracy)
-                      return std::pair<bool,std::string>(false, std::string());
+                if (!absorbed.empty()) group.pattern = basePattern;
+
+                // or the first one close enough to it. The distance is taken between two
+                // plain messages, a template full of masks is close to everything.
+                if (absorbed.empty()) {
+                  for (const HistoryMessage& hm : recent) {
+                    if (hm.group.count < 2 || hm.group.sample.empty()) continue;
+                    if (messageTokenDistance(hm.group.sample, msg) > configSender.accuracy) continue;
                     bool multibyteChanged = false;
-                    std::string merged = mergeMessageTemplates(hm.groupPattern, text, &multibyteChanged);
-                    if (configSender.dont_approximate_multibyte && multibyteChanged)
-                      return std::pair<bool,std::string>(false, std::string());
-                    return std::pair<bool,std::string>(true, merged);
-                  };
-                  for (const auto& hm : recent) {
-                    if (!hm.isGroup || hm.groupPattern.empty()) continue;
-                    auto res = mergeWithGroup(hm, msg);
-                    if (res.first) {
-                      basePattern = res.second;
-                      baseSample  = hm.sample;
-                      mergedCount = hm.groupCount + 1;
-                      groupIds.push_back(hm.messageId);
-                      break;
-                    }
+                    std::string merged =
+                        mergeMessageTemplates(hm.group.pattern, msg, &multibyteChanged);
+                    if (configSender.dont_approximate_multibyte && multibyteChanged) continue;
+                    absorbMessageGroup(group, hm.group);
+                    group.pattern = merged;
+                    group.sample  = hm.group.sample;
+                    absorbed.push_back(hm.messageId);
+                    break;
                   }
                 }
-                if (!groupIds.empty()) {
-                  tbot.deleteMessages(chatId, groupIds);
-                  history.removeMessages(chatId, groupIds);
-                  std::string groupedText = formatMessageGroup(basePattern, mergedCount);
-                  auto sent = tbot.sendMessage(chatId, groupedText);
-                  if (sent)
-                    history.addMessage(chatId, sent->messageId, groupedText, true, basePattern,
-                                       mergedCount, baseSample);
-                  continue;
-                }
 
-                // 2) Иначе попытаться собрать новую группу с одиночными
-                // Build a temporary box with current msg plus recent singles
-                ZMsgBox box(processingStorage, chat.c_str());
-                box.pushMessage(msg);
-                for (const auto& hm : recent) if (!hm.isGroup) box.pushMessage(hm.text);
-                auto pats = box.grouping(configSender.accuracy, configSender.spread,
-                                         configSender.dont_approximate_multibyte);
+                // 2) Otherwise make a new group of the message and the single messages sent
+                if (absorbed.empty()) {
+                  ZMsgBox box(processingStorage, chat.c_str());
+                  box.pushMessage(msg);
+                  for (const HistoryMessage& hm : recent)
+                    if (hm.group.count == 1) box.pushMessage(hm.group.sample);
 
-                int bestCount = 0; std::string bestPattern, bestSample;
-                for (const MessageGroup& pr : pats) {
-                  if (pr.count >= 2 && matchesTemplate(pr.pattern, msg)) {
-                    if (pr.count > bestCount) {
-                      bestCount   = pr.count;
-                      bestPattern = pr.pattern;
-                      bestSample  = pr.sample;
+                  MessageGroup best;
+                  best.count = 0;
+                  for (const MessageGroup& candidate :
+                       box.grouping(configSender.accuracy, configSender.spread,
+                                    configSender.dont_approximate_multibyte))
+                    if (candidate.count >= 2 && candidate.count > best.count &&
+                        templateMatchesMessage(candidate.pattern, msg))
+                      best = candidate;
+
+                  if (best.count >= 2) {
+                    for (const HistoryMessage& hm : recent) {
+                      if (hm.group.count != 1 || !templateMatchesMessage(best.pattern, hm.group.sample))
+                        continue;
+                      absorbMessageGroup(group, hm.group);
+                      absorbed.push_back(hm.messageId);
+                    }
+                    if (!absorbed.empty()) {
+                      group.pattern = best.pattern;
+                      group.sample  = best.sample;
                     }
                   }
                 }
 
-                if (bestCount >= 2) {
-                  // Collect IDs of matching recent singles
-                  std::vector<int32_t> toDelete;
-                  for (const auto& hm : recent) {
-                    if (!hm.isGroup && matchesTemplate(bestPattern, hm.text)) toDelete.push_back(hm.messageId);
-                  }
-                  if (!toDelete.empty()) { tbot.deleteMessages(chatId, toDelete); history.removeMessages(chatId, toDelete); }
-                  std::string groupedText = formatMessageGroup(bestPattern, bestCount);
-                  auto sent = tbot.sendMessage(chatId, groupedText);
-                  if (sent)
-                    history.addMessage(chatId, sent->messageId, groupedText, true, bestPattern,
-                                       bestCount, bestSample);
-                } else {
-                  auto sent = tbot.sendMessage(chatId, msg);
-                  if (sent) history.addMessage(chatId, sent->messageId, msg, false);
+                // 3) Send, and only then remove the messages the group replaces
+                std::string text = renderMessageGroup(group);
+                auto sent        = tbot.sendHtml(chatId, text);
+                if (sent) history.addMessage(chatId, sent->messageId, text, group);
+                if (!absorbed.empty()) {
+                  tbot.deleteMessages(chatId, absorbed);
+                  history.removeMessages(chatId, absorbed);
                 }
               }
             } else {
@@ -1172,14 +1160,13 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 groups = sendBox.grouping(configSender.accuracy, configSender.spread,
                                           configSender.dont_approximate_multibyte);
               } else {
-                for (const std::string& m : messages) groups.push_back({m, m, 1});
+                // With no distance allowed every message stays a group of its own.
+                groups = sendBox.grouping(0, 0, false);
               }
 
               history.cleanup(configSender.historyMaxAgeMinutes);
-              for (const MessageGroup& group : groups) {
-                std::string pattern = group.pattern;
-                std::string sample  = group.sample;
-                int count           = group.count;
+              for (const MessageGroup& fresh : groups) {
+                MessageGroup group = fresh;
                 std::vector<int32_t> sentIds;
 
                 if (configSender.historyMaxAgeMinutes > 0 && configSender.historyCheckCount > 0) {
@@ -1187,30 +1174,30 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                                                           configSender.historyMaxAgeMinutes);
                   std::vector<std::string> absorbed;
                   for (const HistoryMessage& hm : recent) {
-                    const std::string& sent = hm.isGroup ? hm.groupPattern : hm.text;
-                    bool multibyteChanged   = false;
-                    bool similar            = true;
+                    bool multibyteChanged = false;
+                    bool similar          = true;
 
-                    if (sent.empty() || hm.sample.empty()) continue;
+                    if (hm.group.pattern.empty() || hm.group.sample.empty()) continue;
                     /* Both sides are compared as plain messages. Measuring against
-                    the template instead would let a group full of wildcards absorb
+                    the template instead would let a group full of masks absorb
                     everything that follows. */
-                    if (messageTokenDistance(group.sample, hm.sample) >= configSender.accuracy)
+                    if (messageTokenDistance(fresh.sample, hm.group.sample) >= configSender.accuracy)
                       continue;
                     /* Every message of the group has to be similar to every other one.
                     Without that, two groups that were kept apart on purpose would be
                     joined by a third message that happens to sit between them. */
                     for (const std::string& taken : absorbed) {
-                      if (messageTokenDistance(taken, hm.sample) >= configSender.accuracy)
+                      if (messageTokenDistance(taken, hm.group.sample) >= configSender.accuracy)
                         similar = false;
                     }
                     if (!similar) continue;
-                    std::string merged = mergeMessageTemplates(pattern, sent, &multibyteChanged);
+                    std::string merged =
+                        mergeMessageTemplates(group.pattern, hm.group.pattern, &multibyteChanged);
                     if (configSender.dont_approximate_multibyte && multibyteChanged) continue;
-                    pattern = merged;
-                    sample  = hm.sample; // the oldest message of the group stays its anchor
-                    count += hm.groupCount;
-                    absorbed.push_back(hm.sample);
+                    absorbMessageGroup(group, hm.group);
+                    group.pattern = merged;
+                    group.sample  = hm.group.sample; // the oldest message of the group stays its anchor
+                    absorbed.push_back(hm.group.sample);
                     sentIds.push_back(hm.messageId);
                   }
                 }
@@ -1218,11 +1205,9 @@ int zworker::workerSender(sigset_t& sigset, siginfo_t& siginfo) {
                 /* The merged group replaces the messages it absorbed, but only
                 once it is in the chat. Deleting first would leave a hole if the
                 send then failed. */
-                std::string text = formatMessageGroup(pattern, count);
-                auto sent        = tbot.sendMessage(chatId, text);
-                if (sent)
-                  history.addMessage(chatId, sent->messageId, text, count > 1, pattern, count,
-                                     sample);
+                std::string text = renderMessageGroup(group);
+                auto sent        = tbot.sendHtml(chatId, text);
+                if (sent) history.addMessage(chatId, sent->messageId, text, group);
                 if (!sentIds.empty()) {
                   tbot.deleteMessages(chatId, sentIds);
                   history.removeMessages(chatId, sentIds);

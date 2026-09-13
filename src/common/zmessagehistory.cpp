@@ -2,18 +2,14 @@
 #include <algorithm>
 
 void ZMessageHistory::addMessage(int64_t chatId, int32_t messageId, const std::string& text,
-                                 bool isGroup, const std::string& pattern, int count,
-                                 const std::string& sample) {
+                                 const MessageGroup& group) {
   std::lock_guard<std::mutex> lk(mtx_);
   HistoryMessage hm;
-  hm.chatId = chatId;
+  hm.chatId    = chatId;
   hm.messageId = messageId;
-  hm.text = text;
-  hm.ts = std::chrono::system_clock::now();
-  hm.isGroup = isGroup;
-  hm.groupPattern = pattern;
-  hm.groupCount = count;
-  hm.sample = sample.empty() ? text : sample;
+  hm.text      = text;
+  hm.ts        = std::chrono::system_clock::now();
+  hm.group     = group;
   perChat_[chatId].push_back(std::move(hm));
 }
 

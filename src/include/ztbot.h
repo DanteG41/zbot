@@ -16,6 +16,9 @@ public:
   TgBot::Message::Ptr sendMessage(int64_t c, const std::string& m) {
     return bot.getApi().sendMessage(c, fit(m));
   }
+  /* The text is html and has to be escaped and kept within the limit by the
+  caller, cutting it here could break a tag or an entity. */
+  TgBot::Message::Ptr sendHtml(int64_t c, const std::string& html);
   /* Telegram refuses a message longer than 4096 characters. Such a message would
   fail every time it is retried and would hold up everything queued behind it. */
   static std::string fit(const std::string& message) {
