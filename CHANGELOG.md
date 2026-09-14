@@ -1,3 +1,128 @@
+## [0.7.1](https://github.com/DanteG41/zbot/compare/v0.7.0...v0.7.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **sender:** compare a duration as one number ([48e450f](https://github.com/DanteG41/zbot/commit/48e450f5abe01bbf23287cd556454279d17b6853))
+
+
+
+# [0.7.0](https://github.com/DanteG41/zbot/compare/v0.6.8...v0.7.0) (2026-09-13)
+
+
+### Bug Fixes
+
+* **bot:** back off instead of hammering the api after a failed poll ([06ca320](https://github.com/DanteG41/zbot/commit/06ca320cb657a173d426a64fa23d159cbd054724))
+* **bot:** wait for the previous worker instead of polling against it ([c30293a](https://github.com/DanteG41/zbot/commit/c30293abf0a8cf7aa7b76113eb0be2ce9eb32d6b))
+
+
+### Features
+
+* **sender:** readable templates with the hidden values in a quote ([5476c6b](https://github.com/DanteG41/zbot/commit/5476c6b9bc3bbeebe57904988b0777b966f5fab3))
+
+
+
+## [0.6.8](https://github.com/DanteG41/zbot/compare/v0.6.7...v0.6.8) (2026-09-12)
+
+
+### Bug Fixes
+
+* **sender:** stop losing messages around a failed send ([0d5b868](https://github.com/DanteG41/zbot/commit/0d5b868f12362f666d410190fe7174dcaaa186bd))
+* **storage:** check whether stat succeeded before reading st_mode ([6608409](https://github.com/DanteG41/zbot/commit/6608409d20caa164bf9b7eeb1a1597b3923da43f))
+* **zabbix:** send the host group flag the way zabbix 7.0 expects it ([f0aea26](https://github.com/DanteG41/zbot/commit/f0aea2641ea107b80fa0f5daa585b196014e8ce0))
+
+
+### Features
+
+* **net:** give every telegram request a deadline ([d9fffa4](https://github.com/DanteG41/zbot/commit/d9fffa467bbb429e984220ea603de08bc66158c3))
+
+
+
+## [0.6.7](https://github.com/DanteG41/zbot/compare/v0.6.6...v0.6.7) (2026-09-11)
+
+
+### Bug Fixes
+
+* **bot:** tg menu exceptions ([04c2eaa](https://github.com/DanteG41/zbot/commit/04c2eaac91e88ceae434fe079ba500b1253e71d8))
+* **sender:** keep unrelated messages out of a merged group ([05dfeba](https://github.com/DanteG41/zbot/commit/05dfeba372ec9c118bff6c7cbdc8bf06c3f42506))
+
+
+
+## [0.6.6](https://github.com/DanteG41/zbot/compare/v0.6.5...v0.6.6) (2026-09-11)
+
+
+### Bug Fixes
+
+* **zabbix:** log in to the web interface of zabbix 6.4 and newer ([c113c2c](https://github.com/DanteG41/zbot/commit/c113c2caa42726b39363d5c769a9ca907a815eb0))
+
+
+### Features
+
+* **sender:** merge new groups with the messages sent to the chat recently ([8556ab2](https://github.com/DanteG41/zbot/commit/8556ab2772b136847360f5afb47e47da0a46c969))
+
+
+
+## [0.6.5](https://github.com/DanteG41/zbot/compare/v0.6.4...v0.6.5) (2026-09-11)
+
+
+### Features
+
+* **zabbix:** zabbix 7.0 support ([84e2716](https://github.com/DanteG41/zbot/commit/84e27167f9d1e5b5fdcd93f0eef22db57ff45514))
+
+
+
+## [0.6.4](https://github.com/DanteG41/zbot/compare/v0.6.3...v0.6.4) (2026-09-11)
+
+
+### Bug Fixes
+
+* **sender:** build message templates on tokens instead of single bytes ([771238a](https://github.com/DanteG41/zbot/commit/771238a76a18b68a9575380b12cc07d091c5e60e))
+
+
+
+## [0.6.3](https://github.com/DanteG41/zbot/compare/v0.6.2...v0.6.3) (2025-10-03)
+
+
+### Features
+
+* **sender:** immediate send with in-memory history and group updates ([d568082](https://github.com/DanteG41/zbot/commit/d56808259a930519b107a66f87029ba0ad811a5f))
+
+
+### Reverts
+
+* Revert "feat(sender): implement immediate sending with dynamic message grouping" ([1881bf6](https://github.com/DanteG41/zbot/commit/1881bf64b819f8d8f8d8728ccccdda016d8868cd))
+* Revert "fix(config): disable immediate_send by default to enable daemon grouping" ([d25c13b](https://github.com/DanteG41/zbot/commit/d25c13beafa02d67f4861c70b04f0e64b3be2d37))
+* Revert "fix(sender): improve CLI immediate sending and add debug logging" ([b798583](https://github.com/DanteG41/zbot/commit/b79858387fe3274d98b3c36bc4adcfbf02ad0a88))
+
+
+
+## [0.6.2](https://github.com/DanteG41/zbot/compare/v0.6.1...v0.6.2) (2025-10-02)
+
+
+### Bug Fixes
+
+* **config:** disable immediate_send by default to enable daemon grouping ([9ad546a](https://github.com/DanteG41/zbot/commit/9ad546a80048f4a73c4314cbe4db0ebe2ce7ae04))
+
+
+
+## [0.6.1](https://github.com/DanteG41/zbot/compare/v0.6.0...v0.6.1) (2025-10-02)
+
+
+### Bug Fixes
+
+* **sender:** improve CLI immediate sending and add debug logging ([a34c4ff](https://github.com/DanteG41/zbot/commit/a34c4ff5f4fd12132ec60538a9457dfd2ad3ca38))
+
+
+
+# [0.6.0](https://github.com/DanteG41/zbot/compare/v0.5.1...v0.6.0) (2025-10-02)
+
+
+### Features
+
+* **sender:** implement immediate sending with dynamic message grouping ([c2b279f](https://github.com/DanteG41/zbot/commit/c2b279f8c5ca5fc2f327fa4a2235e6a9e54c85ea))
+
+
+
 ## [0.5.1](https://github.com/DanteG41/zbot/compare/v0.5.0...v0.5.1) (2020-10-31)
 
 
