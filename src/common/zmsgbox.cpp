@@ -164,10 +164,10 @@ static bool hasMultibyte(const std::string& token) {
   return false;
 }
 
-/* Split a message into tokens and remember the whitespace preceding each of them,
+/* Split a message on whitespace and remember the whitespace preceding each piece,
 so that a template can be rendered back with the original layout. */
-static void splitTokens(const std::string& message, std::vector<std::string>& tokens,
-                        std::vector<std::string>& separators) {
+static void splitWhitespace(const std::string& message, std::vector<std::string>& tokens,
+                            std::vector<std::string>& separators) {
   size_t i = 0;
   while (i < message.size()) {
     std::string separator;
@@ -292,6 +292,110 @@ static std::string fieldMask(const std::string& core) {
   return timeAt(core, 0, mask) ? mask : std::string();
 }
 
+/* A duration such as 2h 10m 5s, 45s or lag=26m 50s 213ms. Its parts are a number,
+possibly masked, and a unit, separated by whitespace. The prefix is a name with '='
+before the first part. Without a unit it is a number, not a duration. */
+struct duration {
+  std::string prefix;
+  std::vector<std::string> units;
+  bool masked = true; /* every number is a mask */
+};
+
+static const char* const durationUnits[] = {"w", "d", "h", "m", "s", "ms"};
+
+static bool isDurationUnit(const std::string& unit) {
+  for (const char* known : durationUnits)
+    if (unit == known) return true;
+  return false;
+}
+
+static bool parseDuration(const std::string& core, duration& found) {
+  size_t at = 0;
+
+  found = duration();
+  while (at < core.size() and (isalpha(static_cast<unsigned char>(core[at])) or core[at] == '_')) at++;
+  if (at > 0 and at < core.size() and core[at] == '=') {
+    found.prefix = core.substr(0, at + 1);
+    at++;
+  } else {
+    at = 0;
+  }
+  while (at < core.size()) {
+    size_t begin = at;
+    bool digit   = false;
+    while (at < core.size() and (isNumberChar(core[at]) or core[at] == '.')) {
+      if (core[at] != '?' and core[at] != '.') {
+        digit        = true;
+        found.masked = false;
+      }
+      if (core[at] == '?') digit = true;
+      at++;
+    }
+    size_t unit = at;
+    while (at < core.size() and isalpha(static_cast<unsigned char>(core[at]))) at++;
+    if (!digit or unit == begin or !isDurationUnit(core.substr(unit, at - unit))) return false;
+    found.units.push_back(core.substr(unit, at - unit));
+    if (at == core.size()) break;
+    if (!isspace(static_cast<unsigned char>(core[at]))) return false;
+    while (at < core.size() and isspace(static_cast<unsigned char>(core[at]))) at++;
+  }
+  return !found.units.empty();
+}
+
+/* One part of a duration that may be joined with its neighbours. */
+static bool isDurationPart(const std::string& core) {
+  duration found;
+  return parseDuration(core, found) and found.units.size() == 1;
+}
+
+/* Split a message into tokens. The parts of a duration stay in one token, so that
+45s and 1m 5s are compared as one number and not as a word that one of them has.
+The parts are joined whatever whitespace is between them: a template is split again
+from its text, and it has to fall into the same tokens as the messages it was built
+from, which may break the same duration differently. */
+static void splitTokens(const std::string& message, std::vector<std::string>& tokens,
+                        std::vector<std::string>& separators) {
+  std::vector<std::string> pieces, spaces;
+
+  splitWhitespace(message, pieces, spaces);
+  tokens.clear();
+  separators.clear();
+  for (size_t i = 0; i < pieces.size(); i++) {
+    tokens.push_back(pieces[i]);
+    separators.push_back(spaces[i]);
+
+    tokenParts first = splitPunctuation(pieces[i]);
+    if (!isDurationPart(first.core)) continue;
+    std::string trail = first.trail;
+    while (trail.empty() and i + 1 < pieces.size()) {
+      tokenParts next = splitPunctuation(pieces[i + 1]);
+      duration part;
+      if (!next.lead.empty() or !isDurationPart(next.core) or
+          (parseDuration(next.core, part) and !part.prefix.empty()))
+        break;
+      tokens.back() += spaces[i + 1] + pieces[i + 1];
+      trail = next.trail;
+      i++;
+    }
+  }
+}
+
+/* Two durations of a different composition, 45s and 1m 5s, merge into a masked
+duration with every unit either of them has, ?m ?s. */
+static std::string mergeDurations(const duration& a, const duration& b) {
+  std::string merged = a.prefix;
+  bool any           = false;
+
+  for (const char* unit : durationUnits) {
+    bool present = std::find(a.units.begin(), a.units.end(), unit) != a.units.end() or
+                   std::find(b.units.begin(), b.units.end(), unit) != b.units.end();
+    if (!present) continue;
+    merged += std::string(any ? " " : "") + numberMask + unit;
+    any = true;
+  }
+  return any ? merged : a.prefix + numberMask;
+}
+
 /* Costs are counted in halves of a token. A word mask stands for any word, so
 pairing it with one costs half of a real difference: that keeps the alignment from
 pairing a mask with a word while a word that matches exactly is left substituted. */
@@ -337,6 +441,13 @@ static std::string mergeTokens(const std::string& a, const std::string& b, int& 
     }
     cost = costMatch;
     return pa.lead + merged + pa.trail;
+  }
+
+  duration durationA, durationB;
+  if (parseDuration(pa.core, durationA) and parseDuration(pb.core, durationB) and
+      durationA.prefix == durationB.prefix) {
+    cost = costMatch;
+    return lead + mergeDurations(durationA, durationB) + trail;
   }
 
   cost = costChange;
@@ -475,6 +586,15 @@ static bool tokenMatches(const std::string& pattern, const std::string& token) {
     return true;
   }
 
+  duration durationP, durationT;
+  if (parseDuration(pp.core, durationP) and durationP.masked and
+      parseDuration(pt.core, durationT) and durationP.prefix == durationT.prefix) {
+    for (const std::string& unit : durationT.units)
+      if (std::find(durationP.units.begin(), durationP.units.end(), unit) == durationP.units.end())
+        return false;
+    return true;
+  }
+
   std::vector<std::string> numbersP, numbersT;
   if (skeleton(pp.core, &numbersP) != skeleton(pt.core, &numbersT) or numbersP.empty() or
       numbersP.size() != numbersT.size())
@@ -598,6 +718,8 @@ static bool isNamingWord(const std::string& token) {
   if (parts.core.find(wordMask) != std::string::npos or parts.core.find('?') != std::string::npos)
     return false;
   if (!fieldMask(parts.core).empty()) return false;
+  duration found;
+  if (parseDuration(parts.core, found)) return false;
   for (unsigned char c : parts.core)
     if (isalpha(c) or (c & 0x80)) return true;
   return false;
@@ -632,6 +754,8 @@ static std::vector<std::string> hiddenValues(const MessageGroup& group) {
       if (operation != '-' and run != SIZE_MAX) {
         std::string word = words[j];
         word.erase(std::remove(word.begin(), word.end(), ','), word.end());
+        std::replace_if(word.begin(), word.end(),
+                        [](char c) { return isspace(static_cast<unsigned char>(c)); }, ' ');
         if (!word.empty()) phrase[run] += (phrase[run].empty() ? "" : " ") + word;
       }
       if (operation != '+') i++;
