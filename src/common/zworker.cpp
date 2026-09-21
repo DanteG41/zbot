@@ -84,29 +84,29 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
       if (callback->data == "main") {
         bot.getApi().editMessageText("*Select an action:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, mainMenu);
+                                     "Markdown", nullptr, mainMenu);
       } else if (callback->data == "info") {
         bot.getApi().editMessageText("*Info:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, infoMenu);
+                                     "Markdown", nullptr, infoMenu);
       } else if (callback->data == "actions") {
         TgBot::InlineKeyboardMarkup::Ptr actionMenu = zworker::createMenu(
             zworker::Menu::ACTION, zabbix, 0, "", std::to_string(callback->message->chat->id));
         bot.getApi().editMessageText("*Actions:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, actionMenu);
+                                     "Markdown", nullptr, actionMenu);
       } else if (callback->data == "screen") {
         TgBot::InlineKeyboardMarkup::Ptr screenMenu =
             zworker::createMenu(zworker::Menu::SCREEN, zabbix);
         bot.getApi().editMessageText("*Screen:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, screenMenu);
+                                     "Markdown", nullptr, screenMenu);
       } else if (callback->data == "maintenance") {
         TgBot::InlineKeyboardMarkup::Ptr maintenanceMenu =
             zworker::createMenu(zworker::Menu::MAINTENANCE, zabbix);
         bot.getApi().editMessageText("*Maintenance:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, maintenanceMenu);
+                                     "Markdown", nullptr, maintenanceMenu);
       } else if (callback->data == "getchatid") {
         std::string response;
         response = "Chat ID: " + std::to_string(callback->message->chat->id);
@@ -125,20 +125,20 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix);
         bot.getApi().editMessageText("*Maintenance / select a host group:*",
                                      callback->message->chat->id, callback->message->messageId,
-                                     callback->inlineMessageId, "Markdown", false,
+                                     callback->inlineMessageId, "Markdown", nullptr,
                                      maintenanceMenuSelectHostGrp);
       } else if (callback->data == "action.enable") {
         TgBot::InlineKeyboardMarkup::Ptr actionEnableSelect =
             zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix);
         bot.getApi().editMessageText("*Actions / disabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, actionEnableSelect);
+                                     "Markdown", nullptr, actionEnableSelect);
       } else if (callback->data == "action.disable") {
         TgBot::InlineKeyboardMarkup::Ptr actionDisableSelect =
             zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix);
         bot.getApi().editMessageText("*Actions / enabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, actionDisableSelect);
+                                     "Markdown", nullptr, actionDisableSelect);
       } else if (callback->data.compare(0, 18, "action.enable.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -146,7 +146,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::ACTIONENABLE, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Actions / disabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, actionEnableSelect);
+                                     "Markdown", nullptr, actionEnableSelect);
       } else if (callback->data.compare(0, 19, "action.disable.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -154,7 +154,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::ACTIONDISABLE, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Actions / enabled:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, actionDisableSelect);
+                                     "Markdown", nullptr, actionDisableSelect);
       } else if (callback->data.compare(0, 15, "action.disable ") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -233,7 +233,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::Menu::MAINTENANCESELECTHOSTGRP, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Maintenance / select a host group:*",
                                      callback->message->chat->id, callback->message->messageId,
-                                     callback->inlineMessageId, "Markdown", false,
+                                     callback->inlineMessageId, "Markdown", nullptr,
                                      maintenanceMenuSelectHostGrp);
       } else if (callback->data.compare(0, 30, "maintenance.create.select.grp ") == 0) {
         zEvent event;
@@ -306,7 +306,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             refreshMarkup->inlineKeyboard.push_back(refreshrow);
             bot.getApi().sendMessage(callback->message->chat->id,
                                      "*Screen \"" + zabbix.getScreenName(callbackData[1]) + "\":*",
-                                     false, 0, refreshMarkup, "MarkDown");
+                                     nullptr, nullptr, refreshMarkup, "MarkDown");
           }
         } catch (ZZabbixException& e) {
           zworker::removeFiles(images);
@@ -319,7 +319,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::SCREEN, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Screen:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, screenMenu);
+                                     "Markdown", nullptr, screenMenu);
       } else if (callback->data.compare(0, 23, "maintenance.select.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -327,7 +327,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::MAINTENANCE, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Maintenance:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, maintenanceMenu);
+                                     "Markdown", nullptr, maintenanceMenu);
       } else if (callback->data.compare(0, 19, "maintenance.select ") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -336,7 +336,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         bot.getApi().editMessageText(
             "*Maintenance: " + zabbix.getMaintenanceName(callbackData[1]) + "*",
             callback->message->chat->id, callback->message->messageId, callback->inlineMessageId,
-            "Markdown", false, maintenanceMenuSelect);
+            "Markdown", nullptr, maintenanceMenuSelect);
       } else if (callback->data.compare(0, 18, "maintenance.renew ") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -364,7 +364,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::PROBLEMS, zabbix);
         bot.getApi().editMessageText("*Problems:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, problemMenu);
+                                     "Markdown", nullptr, problemMenu);
       } else if (callback->data.compare(0, 24, "problems.select.grp.page") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -372,7 +372,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::createMenu(zworker::Menu::PROBLEMS, zabbix, std::stoi(callbackData[1]));
         bot.getApi().editMessageText("*Problems:*", callback->message->chat->id,
                                      callback->message->messageId, callback->inlineMessageId,
-                                     "Markdown", false, problemMenu);
+                                     "Markdown", nullptr, problemMenu);
       } else if (callback->data.compare(0, 20, "problems.select.grp ") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -380,7 +380,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
             zworker::Menu::PROBLEMSSELECTHOSTGRP, zabbix, 0, "", callbackData[1]);
         bot.getApi().editMessageText("*Problems/" + zabbix.getHostGrpName(callbackData[1]) + ":*",
                                      callback->message->chat->id, callback->message->messageId,
-                                     callback->inlineMessageId, "Markdown", false, problemMenu);
+                                     callback->inlineMessageId, "Markdown", nullptr, problemMenu);
       } else if (callback->data.compare(0, 21, "problems.select.page ") == 0) {
         std::vector<std::string> callbackData;
         boost::split(callbackData, callback->data, boost::is_any_of(" "));
@@ -389,7 +389,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
                                 std::stoi(callbackData[2]), "", callbackData[1]);
         bot.getApi().editMessageText("*Problems/" + zabbix.getHostGrpName(callbackData[1]) + ":*",
                                      callback->message->chat->id, callback->message->messageId,
-                                     callback->inlineMessageId, "Markdown", false, problemMenu);
+                                     callback->inlineMessageId, "Markdown", nullptr, problemMenu);
       } else if (callback->data.compare(0, 16, "problems.select ") == 0) {
         zEvent event;
         std::vector<std::string> callbackData;
@@ -444,8 +444,8 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         access = true;
       if (access) {
         if (configBot.adminUsers.count(message->from->username)) {
-          bot.getApi().sendMessage(message->chat->id, "*Select an action:*", false, 0, mainMenu,
-                                   "MarkDown");
+          bot.getApi().sendMessage(message->chat->id, "*Select an action:*", nullptr, nullptr,
+                                   mainMenu, "MarkDown");
         } else {
           bot.getApi().sendMessage(message->chat->id, "Access denied.");
         }
@@ -487,7 +487,10 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
         }
       });
 
-  TgBot::TgLongPoll longPoll(bot, 100, 10);
+  /* The updates are fetched by zbot itself rather than by TgBot::TgLongPoll: one
+  update the library cannot parse has to be skipped, or telegram hands out the same
+  one on every poll and the bot stands still. */
+  int64_t updateOffset = 0;
 
   /* A restart brings this worker up while the previous one may still sit inside
   a long poll, and telegram answers the younger of two polls with a conflict. The
@@ -586,7 +589,7 @@ int zworker::workerBot(sigset_t& sigset, siginfo_t& siginfo) {
           bot.getApi().deleteWebhook();
           dropWebhook = false;
         }
-        longPoll.start();
+        updateOffset = zbot::pollUpdates(bot, configBot.token, updateOffset, 10);
       }
       failures = 0;
     } catch (TgBot::TgException& e) {

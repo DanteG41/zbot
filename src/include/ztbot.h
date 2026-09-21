@@ -4,6 +4,17 @@
 #include <tgbot/tgbot.h>
 #include <zhttpclient.h>
 
+namespace zbot {
+/* Hands every update of an answer of getUpdates to the bot and returns the offset
+to ask for next time. An update the library cannot parse is logged and skipped:
+telegram would hand out the same one on every poll and the bot would never move
+past it. */
+int64_t dispatchUpdates(TgBot::Bot& bot, const std::string& answer, int64_t offset);
+
+/* One long poll of the telegram api. */
+int64_t pollUpdates(TgBot::Bot& bot, const std::string& token, int64_t offset, int timeout);
+} // namespace zbot
+
 class Ztbot {
 private:
   const char* token;

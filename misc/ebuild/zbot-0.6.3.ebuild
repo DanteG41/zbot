@@ -8,7 +8,7 @@ inherit cmake
 DESCRIPTION=""
 HOMEPAGE="https://github.com/DanteG41/zbot"
 
-TGBOT_COMMIT=601fd7fa0e879084c01ebd59741d73c8f8144b88
+TGBOT_COMMIT=f441693481d74517f8234f26e83d796ef37d024c
 SIMPLEINI_COMMIT=fe082fa81f4a55ddceb55056622136be616b3c6f
 
 SRC_URI="https://github.com/DanteG41/${PN}/archive/v${PV}.tar.gz -> ${P}.tar.gz
